@@ -27,14 +27,22 @@ const (
 )
 
 type CommandRunner interface {
-	RunCommand(jobName string, command Command, logCH chan *logRecord) error
+	RunCommand(
+		jobName string,
+		env map[string]string,
+		command Command,
+		logCH chan *logRecord,
+	) error
 }
 
 type LocalRunner struct {
 }
 
 func (p *LocalRunner) RunCommand(
-	jobName string, command Command, logCH chan *logRecord,
+	jobName string,
+	env map[string]string,
+	command Command,
+	logCH chan *logRecord,
 ) (ret error) {
 	var stdin io.WriteCloser
 	var stdout io.ReadCloser
@@ -127,7 +135,10 @@ func NewSSHRunner(
 }
 
 func (p *SSHRunner) RunCommand(
-	jobName string, command Command, logCH chan *logRecord,
+	jobName string,
+	env map[string]string,
+	command Command,
+	logCH chan *logRecord,
 ) (ret error) {
 	var client *ssh.Client
 	var session *ssh.Session

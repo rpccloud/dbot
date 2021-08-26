@@ -119,7 +119,7 @@ func (p *Manager) Run() {
 		}
 	}
 
-	if e := p.runJob("local", p.jobName, false); e != nil {
+	if e := p.runJob("local", p.jobName, p.config.Env, false); e != nil {
 		fnReportError(e)
 		return
 	}
@@ -138,7 +138,7 @@ func (p *Manager) getRunner(runAt string) (CommandRunner, bool) {
 }
 
 func (p *Manager) runCommand(
-	runAt string, jobName string, command Command,
+	runAt string, jobName string, env map[string]string, command Command,
 ) (ret error) {
 	runner, ok := p.getRunner(runAt)
 	if !ok {
@@ -159,7 +159,9 @@ func (p *Manager) runCommand(
 	}
 
 	if cmdType == "job" {
-		if ret = p.runJob(cmdRunAt, command.Value, false); ret != nil {
+		if ret = p.runJob(
+			cmdRunAt, command.Value, env, false,
+		); ret != nil {
 			return
 		}
 	} else if cmdType == "command" {
@@ -179,7 +181,9 @@ func (p *Manager) runCommand(
 				)
 			}
 
-			if ret = runner.RunCommand(jobName, command, p.logCH); ret != nil {
+			if ret = runner.RunCommand(
+				jobName, env, command, p.logCH,
+			); ret != nil {
 				return
 			}
 		}
@@ -191,7 +195,7 @@ func (p *Manager) runCommand(
 }
 
 func (p *Manager) runJob(
-	runAt string, jobName string, isHandlerError bool,
+	runAt string, jobName string, jobEnv map[string]string, isHandlerError bool,
 ) error {
 	// report job message
 	startMsg := "Job Start!\n"
@@ -224,9 +228,12 @@ func (p *Manager) runJob(
 
 	if !concurrency {
 		for i := 0; i < len(commands); i++ {
-			if e := p.runCommand(runAt, jobName, commands[i]); e != nil {
+			command := commands[i]
+			if e := p.runCommand(
+				runAt, jobName, MergeEnv(jobEnv, command.Env), command,
+			); e != nil {
 				if !isHandlerError && len(job.ErrorHandler) > 0 {
-					_ = p.runJob(runAt, jobName, true)
+					_ = p.runJob(runAt, jobName, jobEnv, true)
 				}
 				return e
 			}
@@ -237,7 +244,9 @@ func (p *Manager) runJob(
 
 		for i := 0; i < len(commands); i++ {
 			go func(command Command) {
-				if e := p.runCommand(runAt, jobName, command); e != nil {
+				if e := p.runCommand(
+					runAt, jobName, MergeEnv(jobEnv, command.Env), command,
+				); e != nil {
 					errCH <- e
 				}
 				atomic.AddInt64(&evalCount, -1)
@@ -250,7 +259,7 @@ func (p *Manager) runJob(
 
 		if len(errCH) != 0 {
 			if !isHandlerError && len(job.ErrorHandler) > 0 {
-				_ = p.runJob(runAt, jobName, true)
+				_ = p.runJob(runAt, jobName, jobEnv, true)
 			}
 			return <-errCH
 		}

@@ -11,6 +11,21 @@ import (
 	"golang.org/x/term"
 )
 
+func MergeEnv(
+	parentEvn map[string]string, env map[string]string,
+) map[string]string {
+	ret := make(map[string]string)
+	for key, value := range parentEvn {
+		ret[key] = value
+	}
+
+	for key, value := range env {
+		ret[key] = value
+	}
+
+	return ret
+}
+
 func ReadStringFromIOReader(reader io.Reader) (string, error) {
 	var b bytes.Buffer
 
