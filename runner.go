@@ -117,13 +117,17 @@ func (p *SSHRunner) RunCommand(
 			go func() {
 				str, e := ReadStringFromIOReader(stdout)
 				retCH <- e
-				logCH <- newLogRecordInfo(p.name, jobName, str)
+				if str != "" {
+					logCH <- newLogRecordInfo(p.name, jobName, "Out: "+str)
+				}
 			}()
 
 			go func() {
 				str, e := ReadStringFromIOReader(stderr)
 				retCH <- e
-				logCH <- newLogRecordError(p.name, jobName, str)
+				if str != "" {
+					logCH <- newLogRecordError(p.name, jobName, "Error: "+str)
+				}
 			}()
 
 			ret = session.Run(command.Value)

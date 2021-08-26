@@ -32,8 +32,12 @@ func NewManager(configPath string, jobName string) *Manager {
 	go func() {
 		headInfoColor := color.New(color.FgGreen, color.Bold)
 		headErrorColor := color.New(color.FgRed, color.Bold)
+		headJobColor := color.New(color.FgYellow, color.Bold)
+		headCommandColor := color.New(color.FgGreen, color.Bold)
 		bodyInfoColor := color.New(color.FgBlue, color.Bold)
 		bodyErrorColor := color.New(color.FgRed, color.Bold)
+		bodyJobColor := color.New(color.FgYellow, color.Bold)
+		bodyCommandColor := color.New(color.FgGreen, color.Bold)
 
 		for {
 			if log, ok := <-ret.logCH; !ok {
@@ -51,6 +55,16 @@ func NewManager(configPath string, jobName string) *Manager {
 							"<%s:%s>: ", log.runAt, log.jobName,
 						)
 						bodyErrorColor.Print(log.body)
+					case recordLevelJob:
+						headJobColor.Printf(
+							"<%s:%s>: ", log.runAt, log.jobName,
+						)
+						bodyJobColor.Print(log.body)
+					case recordLevelCommand:
+						headCommandColor.Printf(
+							"<%s:%s>: ", log.runAt, log.jobName,
+						)
+						bodyCommandColor.Print(log.body)
 					}
 				}
 			}
@@ -129,7 +143,7 @@ func (p *Manager) runCommand(
 	runner, ok := p.getRunner(runAt)
 	if !ok {
 		return fmt.Errorf(
-			"ssh: could not find remote \"%s\" in config file",
+			"could not find remote \"%s\" in config file",
 			runAt,
 		)
 	}
@@ -149,8 +163,13 @@ func (p *Manager) runCommand(
 			return
 		}
 	} else if cmdType == "command" {
-		if ret = runner.RunCommand(jobName, command, p.logCH); ret != nil {
-			return
+		if command.Value != "" {
+			p.logCH <- newLogRecordCommand(
+				runAt, jobName, "Command: "+command.Value+"\n",
+			)
+			if ret = runner.RunCommand(jobName, command, p.logCH); ret != nil {
+				return
+			}
 		}
 	} else {
 		ret = fmt.Errorf("unknown command type %s", cmdType)
@@ -171,9 +190,9 @@ func (p *Manager) runJob(
 		endMsg = "ErrorHandler End!\n"
 	}
 
-	p.logCH <- newLogRecordInfo(runAt, jobName, startMsg)
+	p.logCH <- newLogRecordJob(runAt, jobName, startMsg)
 	defer func() {
-		p.logCH <- newLogRecordInfo(runAt, jobName, endMsg)
+		p.logCH <- newLogRecordJob(runAt, jobName, endMsg)
 	}()
 
 	// get job parameters
