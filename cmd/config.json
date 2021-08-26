@@ -1,0 +1,47 @@
+{
+  "name": "install demo",
+  "remotes": {
+    "dev81": {
+      "port": 22,  "user": "root", "host": "192.168.1.81",  "auth": "password"
+    },
+    "dev82": {
+      "port": 22,  "user": "root", "host": "192.168.1.82",  "auth": "password"
+    },
+    "dev83": {
+      "port": 22,  "user": "root", "host": "192.168.1.83",  "auth": "password"
+    }
+  },
+  "jobs": {
+    "install": {
+      "concurrency": true,
+      "commands": [
+        {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
+        {"type": "job", "value": "nodeInstall", "runAt": "dev82"},
+        {"type": "job", "value": "nodeInstall", "runAt": "dev83"}
+      ],
+      "errorHandler": [
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"},
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev82"},
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev83"}
+      ]
+    },
+    "nodeInstall": {
+      "commands": [
+        {"type": "command", "value": "echo \"ok\" > /opt/demo/test.log"}
+      ]
+    },
+    "nodeUninstall": {
+      "commands": [
+        {"type": "command", "value": "rm /opt/demo/test.log"}
+      ]
+    },
+    "uninstall": {
+      "concurrency": true,
+      "commands": [
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"},
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev82"},
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev83"}
+      ]
+    }
+  }
+}

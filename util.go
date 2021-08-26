@@ -7,20 +7,18 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/fatih/color"
 	"golang.org/x/term"
 )
 
 func ReadStringFromIOReader(reader io.Reader) (string, error) {
 	var b bytes.Buffer
-	for {
-		if _, e := io.Copy(&b, reader); e != nil {
-			if e == io.EOF {
-				return b.String(), nil
-			} else {
-				return "", e
-			}
-		}
+
+	if _, e := io.Copy(&b, reader); e != nil {
+		return "", e
 	}
+
+	return b.String(), nil
 }
 
 func WriteStringToIOWriteCloser(str string, writer io.WriteCloser) (ret error) {
@@ -35,19 +33,15 @@ func WriteStringToIOWriteCloser(str string, writer io.WriteCloser) (ret error) {
 	}
 
 	strReader := strings.NewReader(str)
-	for {
-		if _, e := io.Copy(writer, strReader); e != nil {
-			if e == io.EOF {
-				return nil
-			} else {
-				return e
-			}
-		}
+	if _, e := io.Copy(writer, strReader); e != nil {
+		return e
 	}
+
+	return nil
 }
 
 func GetPasswordFromUser(head string) (string, error) {
-	fmt.Print(head)
+	_, _ = color.New(color.FgMagenta, color.Bold).Print(head)
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 	if err != nil {

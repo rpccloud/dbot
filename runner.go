@@ -127,14 +127,12 @@ func (p *SSHRunner) RunCommand(
 			}()
 
 			ret = session.Run(command.Value)
-
 			// wait for all goroutines
 			for i := 0; i < 3; i++ {
 				if e := <-retCH; e != nil && ret == nil {
 					ret = e
 				}
 			}
-
 			return ret
 		}
 	}
