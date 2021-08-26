@@ -164,9 +164,21 @@ func (p *Manager) runCommand(
 		}
 	} else if cmdType == "command" {
 		if command.Value != "" {
-			p.logCH <- newLogRecordCommand(
-				runAt, jobName, "Command: "+command.Value+"\n",
-			)
+			// print the command
+			if command.Input != "" {
+				p.logCH <- newLogRecordCommand(
+					runAt,
+					jobName,
+					"Command: "+command.Value+" Input: "+command.Input+"\n",
+				)
+			} else {
+				p.logCH <- newLogRecordCommand(
+					runAt,
+					jobName,
+					"Command: "+command.Value+"\n",
+				)
+			}
+
 			if ret = runner.RunCommand(jobName, command, p.logCH); ret != nil {
 				return
 			}
