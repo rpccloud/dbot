@@ -5,7 +5,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -25,16 +27,69 @@ const (
 )
 
 type CommandRunner interface {
-	RunCommand(jobName string, command Command, out chan *logRecord) error
+	RunCommand(jobName string, command Command, logCH chan *logRecord) error
 }
 
 type LocalRunner struct {
 }
 
 func (p *LocalRunner) RunCommand(
-	jobName string, command Command, out chan *logRecord,
-) error {
-	return nil
+	jobName string, command Command, logCH chan *logRecord,
+) (ret error) {
+	var stdin io.WriteCloser
+	var stdout io.ReadCloser
+	var stderr io.ReadCloser
+
+	// defer func ()  {
+	// 	if stdin != nil {
+	// 		_ = stdin.Close()
+	// 	}
+
+	// 	if stdout != nil
+
+	// }
+
+	cmdArray := strings.Fields(command.Value)
+	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
+
+	if stdin, ret = cmd.StdinPipe(); ret != nil {
+		return
+	} else if stdout, ret = cmd.StdoutPipe(); ret != nil {
+		return
+	} else if stderr, ret = cmd.StderrPipe(); ret != nil {
+		return
+	} else {
+		retCH := make(chan error, 3)
+
+		go func() {
+			retCH <- WriteStringToIOWriteCloser(command.Input, stdin)
+		}()
+
+		go func() {
+			str, e := ReadStringFromIOReader(stdout)
+			retCH <- e
+			if str != "" {
+				logCH <- newLogRecordInfo("local", jobName, "Out: "+str)
+			}
+		}()
+
+		go func() {
+			str, e := ReadStringFromIOReader(stderr)
+			retCH <- e
+			if str != "" {
+				logCH <- newLogRecordError("local", jobName, "Error: "+str)
+			}
+		}()
+
+		ret = cmd.Run()
+		// wait for all goroutines
+		for i := 0; i < 3; i++ {
+			if e := <-retCH; e != nil && ret == nil {
+				ret = e
+			}
+		}
+		return ret
+	}
 }
 
 type SSHRunner struct {

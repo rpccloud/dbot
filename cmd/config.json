@@ -15,11 +15,13 @@
     "install": {
       "concurrency": true,
       "commands": [
+        {"type": "job", "value": "nodeInstall", "runAt": "local"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev82"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev83"}
       ],
       "errorHandler": [
+        {"type": "job", "value": "nodeUninstall", "runAt": "local"},
         {"type": "job", "value": "nodeUninstall", "runAt": "dev81"},
         {"type": "job", "value": "nodeUninstall", "runAt": "dev82"},
         {"type": "job", "value": "nodeUninstall", "runAt": "dev83"}
@@ -27,7 +29,7 @@
     },
     "nodeInstall": {
       "commands": [
-        {"type": "command", "value": "echo \"ok\" > /opt/demo/test.log"}
+        {"type": "command", "value": "tr [a-z] [A-Z]", "input": "abc"}
       ]
     },
     "nodeUninstall": {
