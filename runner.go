@@ -40,33 +40,29 @@ func (p *LocalRunner) RunCommand(
 	var stdout io.ReadCloser
 	var stderr io.ReadCloser
 
-	// defer func ()  {
-	// 	if stdin != nil {
-	// 		_ = stdin.Close()
-	// 	}
-
-	// 	if stdout != nil
-
-	// }
-
 	cmdArray := strings.Fields(command.Value)
 	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
 
 	if stdin, ret = cmd.StdinPipe(); ret != nil {
 		return
 	} else if stdout, ret = cmd.StdoutPipe(); ret != nil {
+		_ = stdin.Close()
 		return
 	} else if stderr, ret = cmd.StderrPipe(); ret != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return
 	} else {
 		retCH := make(chan error, 3)
 
 		go func() {
-			retCH <- WriteStringToIOWriteCloser(command.Input, stdin)
+			retCH <- WriteStringToIOWriter(command.Input, stdin)
+			_ = stdin.Close()
 		}()
 
 		go func() {
 			str, e := ReadStringFromIOReader(stdout)
+			_ = stdout.Close()
 			retCH <- e
 			if str != "" {
 				logCH <- newLogRecordInfo("local", jobName, "Out: "+str)
@@ -75,6 +71,7 @@ func (p *LocalRunner) RunCommand(
 
 		go func() {
 			str, e := ReadStringFromIOReader(stderr)
+			_ = stderr.Close()
 			retCH <- e
 			if str != "" {
 				logCH <- newLogRecordError("local", jobName, "Error: "+str)
@@ -82,12 +79,14 @@ func (p *LocalRunner) RunCommand(
 		}()
 
 		ret = cmd.Run()
+
 		// wait for all goroutines
 		for i := 0; i < 3; i++ {
 			if e := <-retCH; e != nil && ret == nil {
 				ret = e
 			}
 		}
+
 		return ret
 	}
 }
@@ -159,14 +158,17 @@ func (p *SSHRunner) RunCommand(
 		if stdin, ret = session.StdinPipe(); ret != nil {
 			return
 		} else if stdout, ret = session.StdoutPipe(); ret != nil {
+			_ = stdin.Close()
 			return
 		} else if stderr, ret = session.StderrPipe(); ret != nil {
+			_ = stdin.Close()
 			return
 		} else {
 			retCH := make(chan error, 3)
 
 			go func() {
-				retCH <- WriteStringToIOWriteCloser(command.Input, stdin)
+				retCH <- WriteStringToIOWriter(command.Input, stdin)
+				_ = stdin.Close()
 			}()
 
 			go func() {

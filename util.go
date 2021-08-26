@@ -21,13 +21,7 @@ func ReadStringFromIOReader(reader io.Reader) (string, error) {
 	return b.String(), nil
 }
 
-func WriteStringToIOWriteCloser(str string, writer io.WriteCloser) (ret error) {
-	defer func() {
-		if e := writer.Close(); e != nil && e != io.EOF && ret == nil {
-			ret = e
-		}
-	}()
-
+func WriteStringToIOWriter(str string, writer io.Writer) (ret error) {
 	if str == "" {
 		return nil
 	}
