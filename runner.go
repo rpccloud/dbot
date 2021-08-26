@@ -80,13 +80,13 @@ func (p *SSHRunner) RunCommand(
 
 	defer func() {
 		if session != nil {
-			if e := session.Close(); ret == nil && e != nil {
+			if e := session.Close(); e != nil && e != io.EOF && ret == nil {
 				ret = e
 			}
 		}
 
 		if client != nil {
-			if e := client.Close(); ret == nil && e != nil {
+			if e := client.Close(); e != nil && e != io.EOF && ret == nil {
 				ret = e
 			}
 		}
