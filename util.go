@@ -14,7 +14,7 @@ import (
 func ReadStringFromIOReader(reader io.Reader) (string, error) {
 	var b bytes.Buffer
 
-	if _, e := io.Copy(&b, reader); e != nil {
+	if _, e := io.Copy(&b, reader); e != nil && e != io.EOF {
 		return "", e
 	}
 
@@ -23,7 +23,7 @@ func ReadStringFromIOReader(reader io.Reader) (string, error) {
 
 func WriteStringToIOWriteCloser(str string, writer io.WriteCloser) (ret error) {
 	defer func() {
-		if e := writer.Close(); e != nil && ret == nil {
+		if e := writer.Close(); e != nil && e != io.EOF && ret == nil {
 			ret = e
 		}
 	}()
@@ -33,7 +33,7 @@ func WriteStringToIOWriteCloser(str string, writer io.WriteCloser) (ret error) {
 	}
 
 	strReader := strings.NewReader(str)
-	if _, e := io.Copy(writer, strReader); e != nil {
+	if _, e := io.Copy(writer, strReader); e != nil && e != io.EOF {
 		return e
 	}
 

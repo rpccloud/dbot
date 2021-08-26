@@ -32,11 +32,11 @@ func NewManager(configPath string, jobName string) *Manager {
 	go func() {
 		headInfoColor := color.New(color.FgGreen, color.Bold)
 		headErrorColor := color.New(color.FgRed, color.Bold)
-		bodyColor := color.New(color.FgBlue, color.Bold)
+		bodyInfoColor := color.New(color.FgBlue, color.Bold)
+		bodyErrorColor := color.New(color.FgRed, color.Bold)
 
 		for {
 			if log, ok := <-ret.logCH; !ok {
-				fmt.Println("manager exit")
 				return
 			} else {
 				if log.body != "" {
@@ -45,12 +45,12 @@ func NewManager(configPath string, jobName string) *Manager {
 						headInfoColor.Printf(
 							"<%s:%s>: ", log.runAt, log.jobName,
 						)
-						bodyColor.Println(log.body)
+						bodyInfoColor.Print(log.body)
 					case recordLevelError:
 						headErrorColor.Printf(
 							"<%s:%s>: ", log.runAt, log.jobName,
 						)
-						bodyColor.Println(log.body)
+						bodyErrorColor.Print(log.body)
 					}
 				}
 			}
@@ -163,16 +163,18 @@ func (p *Manager) runJob(
 	runAt string, jobName string, isHandlerError bool,
 ) error {
 	// report job message
-	startMsg := "Job Start!"
-	endMsg := "Job End!"
+	startMsg := "Job Start!\n"
+	endMsg := "Job End!\n"
 
 	if isHandlerError {
-		startMsg = "ErrorHandler Start!"
-		endMsg = "ErrorHandler End!"
+		startMsg = "ErrorHandler Start!\n"
+		endMsg = "ErrorHandler End!\n"
 	}
 
 	p.logCH <- newLogRecordInfo(runAt, jobName, startMsg)
-	defer newLogRecordInfo(runAt, jobName, endMsg)
+	defer func() {
+		p.logCH <- newLogRecordInfo(runAt, jobName, endMsg)
+	}()
 
 	// get job parameters
 	job, ok := p.config.Jobs[jobName]
@@ -192,7 +194,7 @@ func (p *Manager) runJob(
 	if !concurrency {
 		for i := 0; i < len(commands); i++ {
 			if e := p.runCommand(runAt, jobName, commands[i]); e != nil {
-				if !isHandlerError {
+				if !isHandlerError && len(job.ErrorHandler) > 0 {
 					_ = p.runJob(runAt, jobName, true)
 				}
 				return e
@@ -216,7 +218,7 @@ func (p *Manager) runJob(
 		}
 
 		if len(errCH) != 0 {
-			if !isHandlerError {
+			if !isHandlerError && len(job.ErrorHandler) > 0 {
 				_ = p.runJob(runAt, jobName, true)
 			}
 			return <-errCH
