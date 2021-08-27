@@ -10,8 +10,11 @@
   },
   "jobs": {
     "install": {
-      "concurrency": true,
+      "concurrency": false,
       "commands": [
+        {"type": "job", "value": "nodeInstall", "runAt": "local"},
+        {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
+        {"type": "job", "value": "nodeInstall", "runAt": "local"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev81"}
       ],
       "errorHandler": [

@@ -16,6 +16,15 @@ var rootEnv = map[string]string{
 	"KeyEnter": "\n",
 }
 
+var outFilter = []string{
+	"\033",
+}
+
+var errFilter = []string{
+	"Output is not to a terminal",
+	"Input is not from a terminal",
+}
+
 type Manager struct {
 	jobName    string
 	configPath string
@@ -51,15 +60,20 @@ func NewManager(configPath string, jobName string) *Manager {
 				if log.body != "" {
 					switch log.level {
 					case recordLevelInfo:
-						headInfoColor.Printf(
-							"<%s:%s>: ", log.runAt, log.jobName,
-						)
-						bodyInfoColor.Print(log.body)
+						if !FilterString(log.body, outFilter) {
+							headInfoColor.Printf(
+								"<%s:%s>: ", log.runAt, log.jobName,
+							)
+							bodyInfoColor.Print(log.body)
+						}
 					case recordLevelError:
-						headErrorColor.Printf(
-							"<%s:%s>: ", log.runAt, log.jobName,
-						)
-						bodyErrorColor.Print(log.body)
+						if !FilterString(log.body, errFilter) {
+							headErrorColor.Printf(
+								"<%s:%s>: ", log.runAt, log.jobName,
+							)
+							bodyErrorColor.Print(log.body)
+						}
+
 					case recordLevelJob:
 						headJobColor.Printf(
 							"<%s:%s>: ", log.runAt, log.jobName,

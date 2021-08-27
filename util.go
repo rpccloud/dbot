@@ -12,7 +12,7 @@ import (
 )
 
 func MergeEnv(
-	parentEvn map[string]string, 
+	parentEvn map[string]string,
 	env map[string]string,
 ) map[string]string {
 	ret := make(map[string]string)
@@ -67,4 +67,14 @@ func GetPasswordFromUser(head string) (string, error) {
 		return "", err
 	}
 	return string(bytePassword), nil
+}
+
+func FilterString(str string, filter []string) bool {
+	for _, v := range filter {
+		if strings.Contains(str, v) {
+			return true
+		}
+	}
+
+	return false
 }
