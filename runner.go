@@ -29,8 +29,9 @@ const (
 type CommandRunner interface {
 	RunCommand(
 		jobName string,
-		env map[string]string,
-		command Command,
+		command string,
+		input string,
+		interactive bool,
 		logCH chan *logRecord,
 	) error
 }
@@ -40,15 +41,16 @@ type LocalRunner struct {
 
 func (p *LocalRunner) RunCommand(
 	jobName string,
-	env map[string]string,
-	command Command,
+	command string,
+	input string,
+	interactive bool,
 	logCH chan *logRecord,
 ) (ret error) {
 	var stdin io.WriteCloser
 	var stdout io.ReadCloser
 	var stderr io.ReadCloser
 
-	cmdArray := strings.Fields(command.Value)
+	cmdArray := strings.Fields(command)
 	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
 
 	if stdin, ret = cmd.StdinPipe(); ret != nil {
@@ -64,7 +66,7 @@ func (p *LocalRunner) RunCommand(
 		retCH := make(chan error, 3)
 
 		go func() {
-			retCH <- WriteStringToIOWriter(command.Input, stdin)
+			retCH <- WriteStringToIOWriter(input, stdin)
 			_ = stdin.Close()
 		}()
 
@@ -136,8 +138,9 @@ func NewSSHRunner(
 
 func (p *SSHRunner) RunCommand(
 	jobName string,
-	env map[string]string,
-	command Command,
+	command string,
+	input string,
+	interactive bool,
 	logCH chan *logRecord,
 ) (ret error) {
 	var client *ssh.Client
@@ -178,7 +181,7 @@ func (p *SSHRunner) RunCommand(
 			retCH := make(chan error, 3)
 
 			go func() {
-				retCH <- WriteStringToIOWriter(command.Input, stdin)
+				retCH <- WriteStringToIOWriter(input, stdin)
 				_ = stdin.Close()
 			}()
 
@@ -198,7 +201,7 @@ func (p *SSHRunner) RunCommand(
 				}
 			}()
 
-			ret = session.Run(command.Value)
+			ret = session.Run(command)
 			// wait for all goroutines
 			for i := 0; i < 3; i++ {
 				if e := <-retCH; e != nil && ret == nil {

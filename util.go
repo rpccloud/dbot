@@ -29,7 +29,7 @@ func MergeEnv(
 func ReplaceStringByEnv(str string, env map[string]string) string {
 	replaceArray := make([]string, 0)
 	for key, value := range env {
-		replaceArray = append(replaceArray, "${"+key+"}", value)
+		replaceArray = append(replaceArray, "#["+key+"]", value)
 	}
 	replacer := strings.NewReplacer(replaceArray...)
 	return replacer.Replace(str)

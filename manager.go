@@ -182,7 +182,11 @@ func (p *Manager) runCommand(
 			}
 
 			if ret = runner.RunCommand(
-				jobName, env, command, p.logCH,
+				jobName,
+				ReplaceStringByEnv(command.Value, env),
+				ReplaceStringByEnv(command.Input, env),
+				false,
+				p.logCH,
 			); ret != nil {
 				return
 			}

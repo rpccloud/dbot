@@ -3,33 +3,24 @@
   "remotes": {
     "dev81": {
       "port": 22,  "user": "root", "host": "192.168.1.81",  "auth": "password"
-    },
-    "dev82": {
-      "port": 22,  "user": "root", "host": "192.168.1.82",  "auth": "password"
-    },
-    "dev83": {
-      "port": 22,  "user": "root", "host": "192.168.1.83",  "auth": "password"
     }
+  },
+  "env": {
+    "CustomValue": "ok"
   },
   "jobs": {
     "install": {
       "concurrency": true,
       "commands": [
-        {"type": "job", "value": "nodeInstall", "runAt": "local"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev82"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev83"}
+        {"type": "job", "value": "nodeInstall", "runAt": "dev81"}
       ],
       "errorHandler": [
-        {"type": "job", "value": "nodeUninstall", "runAt": "local"},
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"},
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev82"},
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev83"}
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"}
       ]
     },
     "nodeInstall": {
       "commands": [
-        {"type": "command", "value": "tr [a-z] [A-Z]", "input": "abc"}
+        {"type": "command", "value": "echo \"#[CustomValue]\"", "input": "iab\n:wq"}
       ]
     },
     "nodeUninstall": {
@@ -40,9 +31,7 @@
     "uninstall": {
       "concurrency": true,
       "commands": [
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"},
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev82"},
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev83"}
+        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"}
       ]
     }
   }
