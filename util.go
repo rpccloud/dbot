@@ -11,6 +11,8 @@ import (
 	"golang.org/x/term"
 )
 
+var authColor = color.New(color.FgMagenta, color.Bold)
+
 func MergeEnv(
 	parentEvn map[string]string,
 	env map[string]string,
@@ -46,21 +48,8 @@ func ReadStringFromIOReader(reader io.Reader) (string, error) {
 	return b.String(), nil
 }
 
-func WriteStringToIOWriter(str string, writer io.Writer) (ret error) {
-	if str == "" {
-		return nil
-	}
-
-	strReader := strings.NewReader(str)
-	if _, e := io.Copy(writer, strReader); e != nil && e != io.EOF {
-		return e
-	}
-
-	return nil
-}
-
 func GetPasswordFromUser(head string) (string, error) {
-	_, _ = color.New(color.FgMagenta, color.Bold).Print(head)
+	_, _ = authColor.Print(head)
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 	if err != nil {

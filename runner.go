@@ -86,8 +86,7 @@ type CommandRunner interface {
 	) error
 }
 
-type LocalRunner struct {
-}
+type LocalRunner struct{}
 
 func (p *LocalRunner) RunCommand(
 	jobName string,
@@ -173,6 +172,11 @@ func NewSSHRunner(
 		return nil, e
 	}
 	_ = client.Close()
+
+	if ret.password == "" {
+		_, _ = authColor.Printf("Use PublicKey on %s@%s\n", ret.user, ret.host)
+	}
+
 	return ret, nil
 }
 

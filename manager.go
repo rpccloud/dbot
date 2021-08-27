@@ -97,6 +97,8 @@ func (p *Manager) Close() {
 	p.Lock()
 	defer p.Unlock()
 
+	time.Sleep(500 * time.Millisecond)
+
 	for len(p.logCH) != 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -122,19 +124,20 @@ func (p *Manager) Run() {
 		fnReportError(e)
 		return
 	} else {
-		for name, remote := range p.config.Remotes {
-			if name == "local" {
+		for _, name := range p.getRemoteServersForJob(p.jobName) {
+			if remote, ok := p.config.Remotes[name]; ok {
+				ssh, e := NewSSHRunner(name, remote.Port, remote.User, remote.Host)
+				if e != nil {
+					fnReportError(e)
+					return
+				}
+				p.sshMap[name] = ssh
+			} else {
 				fnReportError(
-					fmt.Errorf("remote name \"local\" is not allowed"),
+					fmt.Errorf("remote \"%s\" is not found", name),
 				)
 				return
 			}
-			ssh, e := NewSSHRunner(name, remote.Port, remote.User, remote.Host)
-			if e != nil {
-				fnReportError(e)
-				return
-			}
-			p.sshMap[name] = ssh
 		}
 	}
 
@@ -214,6 +217,46 @@ func (p *Manager) runCommand(
 	}
 
 	return
+}
+
+func (p *Manager) getRemoteServersForJob(jobName string) []string {
+	fnContains := func(arr []string, v string) bool {
+		for _, a := range arr {
+			if a == v {
+				return true
+			}
+		}
+		return false
+	}
+	fnUniAppend := func(arr []string, v string) []string {
+		if fnContains(arr, v) {
+			return arr
+		} else {
+			return append(arr, v)
+		}
+	}
+
+	ret := make([]string, 0)
+
+	if job, ok := p.config.Jobs[jobName]; ok {
+		commands := append(job.Commands, job.ErrorHandler...)
+
+		for _, cmd := range commands {
+			if cmd.Type == "job" {
+				if cmd.RunAt != "" && cmd.RunAt != "local" {
+					ret = fnUniAppend(ret, cmd.RunAt)
+				}
+
+				if cmd.Value != "" {
+					for _, v := range p.getRemoteServersForJob(cmd.Value) {
+						ret = fnUniAppend(ret, v)
+					}
+				}
+			}
+		}
+	}
+
+	return ret
 }
 
 func (p *Manager) runJob(
