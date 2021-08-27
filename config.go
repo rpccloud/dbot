@@ -14,12 +14,11 @@ type Job struct {
 }
 
 type Command struct {
-	Type        string            `json:"type"`
-	Value       string            `json:"value"`
-	RunAt       string            `json:"runAt"`
-	Inputs      []string          `json:"inputs"`
-	Env         map[string]string `json:"env"`
-	Interactive bool              `json:"interactive"`
+	Type   string            `json:"type"`
+	Value  string            `json:"value"`
+	RunAt  string            `json:"runAt"`
+	Inputs []string          `json:"inputs"`
+	Env    map[string]string `json:"env"`
 }
 
 type Config struct {

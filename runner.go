@@ -82,7 +82,6 @@ type CommandRunner interface {
 		jobName string,
 		command string,
 		inputs []string,
-		interactive bool,
 		logCH chan *logRecord,
 	) error
 }
@@ -94,7 +93,6 @@ func (p *LocalRunner) RunCommand(
 	jobName string,
 	command string,
 	inputs []string,
-	interactive bool,
 	logCH chan *logRecord,
 ) (ret error) {
 	var stdout io.ReadCloser
@@ -182,7 +180,6 @@ func (p *SSHRunner) RunCommand(
 	jobName string,
 	command string,
 	inputs []string,
-	interactive bool,
 	logCH chan *logRecord,
 ) (ret error) {
 	var client *ssh.Client

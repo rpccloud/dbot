@@ -1,21 +1,20 @@
 {
   "name": "install demo",
   "remotes": {
-    "dev81": {
-      "port": 22,  "user": "root", "host": "192.168.1.81",  "auth": "password"
-    }
+    "dev81": { "port": 22,  "user": "root", "host": "192.168.1.81"},
+    "dev82": { "port": 22,  "user": "root", "host": "192.168.1.82"},
+    "dev83": { "port": 22,  "user": "root", "host": "192.168.1.83"}
   },
   "env": {
     "CustomValue": "ok"
   },
   "jobs": {
     "install": {
-      "concurrency": false,
+      "concurrency": true,
       "commands": [
-        {"type": "job", "value": "nodeInstall", "runAt": "local"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
-        {"type": "job", "value": "nodeInstall", "runAt": "local"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev81"}
+        {"type": "job", "value": "nodeInstall", "runAt": "dev82"},
+        {"type": "job", "value": "nodeInstall", "runAt": "dev83"}
       ],
       "errorHandler": [
         {"type": "job", "value": "nodeUninstall", "runAt": "dev81"}
@@ -23,11 +22,14 @@
     },
     "nodeInstall": {
       "commands": [
+        {"type": "command", "value": "apt-get update", "inputs": [
+          "y\n"
+        ]},
         {"type": "command", "value": "vim test.sh", "inputs": [
           "i", 
           "test\n",
           "test\n",
-          "abc\n",
+          "#[CustomValue]\n",
           "#[KeyESC]:wq\n"
         ]}
       ]
