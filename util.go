@@ -12,7 +12,8 @@ import (
 )
 
 func MergeEnv(
-	parentEvn map[string]string, env map[string]string,
+	parentEvn map[string]string, 
+	env map[string]string,
 ) map[string]string {
 	ret := make(map[string]string)
 	for key, value := range parentEvn {
