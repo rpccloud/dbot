@@ -185,7 +185,7 @@ func (p *Manager) runCommand(
 				jobName,
 				ReplaceStringByEnv(command.Value, env),
 				ReplaceStringByEnv(command.Input, env),
-				false,
+				command.Interactive,
 				p.logCH,
 			); ret != nil {
 				return
