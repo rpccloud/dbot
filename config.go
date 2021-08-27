@@ -17,7 +17,7 @@ type Command struct {
 	Type        string            `json:"type"`
 	Value       string            `json:"value"`
 	RunAt       string            `json:"runAt"`
-	Input       string            `json:"input"`
+	Inputs      []string          `json:"inputs"`
 	Env         map[string]string `json:"env"`
 	Interactive bool              `json:"interactive"`
 }

@@ -20,7 +20,13 @@
     },
     "nodeInstall": {
       "commands": [
-        {"type": "command", "value": "echo \"#[CustomValue]\"", "input": "iab\n:wq"}
+        {"type": "command", "value": "vim test.sh", "inputs": [
+          "i", 
+          "test\n",
+          "test\n",
+          "abc\n",
+          "#[KeyESC]:wq\n"
+        ]}
       ]
     },
     "nodeUninstall": {

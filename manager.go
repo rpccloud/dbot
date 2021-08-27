@@ -11,6 +11,11 @@ import (
 	"github.com/fatih/color"
 )
 
+var rootEnv = map[string]string{
+	"KeyESC":   "\033",
+	"KeyEnter": "\n",
+}
+
 type Manager struct {
 	jobName    string
 	configPath string
@@ -119,7 +124,9 @@ func (p *Manager) Run() {
 		}
 	}
 
-	if e := p.runJob("local", p.jobName, p.config.Env, false); e != nil {
+	if e := p.runJob(
+		"local", p.jobName, MergeEnv(rootEnv, p.config.Env), false,
+	); e != nil {
 		fnReportError(e)
 		return
 	}
@@ -167,24 +174,22 @@ func (p *Manager) runCommand(
 	} else if cmdType == "command" {
 		if command.Value != "" {
 			// print the command
-			if command.Input != "" {
-				p.logCH <- newLogRecordCommand(
-					runAt,
-					jobName,
-					"Command: "+command.Value+" Input: "+command.Input+"\n",
-				)
-			} else {
-				p.logCH <- newLogRecordCommand(
-					runAt,
-					jobName,
-					"Command: "+command.Value+"\n",
-				)
+			p.logCH <- newLogRecordCommand(
+				runAt,
+				jobName,
+				"Command: "+command.Value+"\n",
+			)
+
+			// parse inputs
+			inputs := make([]string, len(command.Inputs))
+			for i := 0; i < len(command.Inputs); i++ {
+				inputs[i] = ReplaceStringByEnv(command.Inputs[i], env)
 			}
 
 			if ret = runner.RunCommand(
 				jobName,
 				ReplaceStringByEnv(command.Value, env),
-				ReplaceStringByEnv(command.Input, env),
+				inputs,
 				command.Interactive,
 				p.logCH,
 			); ret != nil {

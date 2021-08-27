@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -26,11 +28,60 @@ const (
 	SSHAuthPublicKeyXMSS
 )
 
+type RunnerInput struct {
+	delay  time.Duration
+	reader io.Reader
+	inputs []string
+	stdin  io.Reader
+
+	sync.Mutex
+}
+
+func NewRunnerInput(inputs []string, stdin io.Reader) *RunnerInput {
+	return &RunnerInput{
+		delay:  time.Second,
+		reader: nil,
+		inputs: inputs,
+		stdin:  stdin,
+	}
+}
+
+func (p *RunnerInput) Read(b []byte) (n int, err error) {
+	p.Lock()
+	defer p.Unlock()
+
+	time.Sleep(p.delay)
+
+	for {
+		if p.reader == nil {
+			if len(p.inputs) > 0 {
+				p.reader = strings.NewReader(p.inputs[0])
+				p.inputs = p.inputs[1:]
+				p.delay = 400 * time.Millisecond
+			} else {
+				p.reader = p.stdin
+				p.stdin = nil
+				p.delay = 0
+			}
+		}
+
+		if p.reader == nil {
+			return 0, io.EOF
+		}
+
+		if n, e := p.reader.Read(b); e != io.EOF {
+			return n, e
+		}
+
+		p.reader = nil
+	}
+}
+
 type CommandRunner interface {
 	RunCommand(
 		jobName string,
 		command string,
-		input string,
+		inputs []string,
 		interactive bool,
 		logCH chan *logRecord,
 	) error
@@ -42,33 +93,23 @@ type LocalRunner struct {
 func (p *LocalRunner) RunCommand(
 	jobName string,
 	command string,
-	input string,
+	inputs []string,
 	interactive bool,
 	logCH chan *logRecord,
 ) (ret error) {
-	var stdin io.WriteCloser
 	var stdout io.ReadCloser
 	var stderr io.ReadCloser
 
 	cmdArray := strings.Fields(command)
 	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
 
-	if stdin, ret = cmd.StdinPipe(); ret != nil {
-		return
-	} else if stdout, ret = cmd.StdoutPipe(); ret != nil {
-		_ = stdin.Close()
+	if stdout, ret = cmd.StdoutPipe(); ret != nil {
 		return
 	} else if stderr, ret = cmd.StderrPipe(); ret != nil {
-		_ = stdin.Close()
 		_ = stdout.Close()
 		return
 	} else {
-		retCH := make(chan error, 3)
-
-		go func() {
-			retCH <- WriteStringToIOWriter(input, stdin)
-			_ = stdin.Close()
-		}()
+		retCH := make(chan error, 2)
 
 		go func() {
 			str, e := ReadStringFromIOReader(stdout)
@@ -88,10 +129,11 @@ func (p *LocalRunner) RunCommand(
 			}
 		}()
 
+		cmd.Stdin = NewRunnerInput(inputs, nil)
 		ret = cmd.Run()
 
 		// wait for all goroutines
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 2; i++ {
 			if e := <-retCH; e != nil && ret == nil {
 				ret = e
 			}
@@ -139,7 +181,7 @@ func NewSSHRunner(
 func (p *SSHRunner) RunCommand(
 	jobName string,
 	command string,
-	input string,
+	inputs []string,
 	interactive bool,
 	logCH chan *logRecord,
 ) (ret error) {
@@ -165,25 +207,15 @@ func (p *SSHRunner) RunCommand(
 	} else if session, ret = client.NewSession(); ret != nil {
 		return
 	} else {
-		var stdin io.WriteCloser
 		var stdout io.Reader
 		var stderr io.Reader
 
-		if stdin, ret = session.StdinPipe(); ret != nil {
-			return
-		} else if stdout, ret = session.StdoutPipe(); ret != nil {
-			_ = stdin.Close()
+		if stdout, ret = session.StdoutPipe(); ret != nil {
 			return
 		} else if stderr, ret = session.StderrPipe(); ret != nil {
-			_ = stdin.Close()
 			return
 		} else {
-			retCH := make(chan error, 3)
-
-			go func() {
-				retCH <- WriteStringToIOWriter(input, stdin)
-				_ = stdin.Close()
-			}()
+			retCH := make(chan error, 2)
 
 			go func() {
 				str, e := ReadStringFromIOReader(stdout)
@@ -201,9 +233,10 @@ func (p *SSHRunner) RunCommand(
 				}
 			}()
 
+			session.Stdin = NewRunnerInput(inputs, nil)
 			ret = session.Run(command)
 			// wait for all goroutines
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 2; i++ {
 				if e := <-retCH; e != nil && ret == nil {
 					ret = e
 				}
