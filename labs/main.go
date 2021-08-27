@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 type TerminalStdin struct {
@@ -62,7 +62,6 @@ func (p *TerminalStdin) Read(b []byte) (n int, err error) {
 }
 
 func main() {
-	os.Stdout.Write([]byte("Hello World"))
 	config := &ssh.ClientConfig{
 		User:            "root",
 		Auth:            []ssh.AuthMethod{ssh.Password("World2019")},
@@ -82,18 +81,22 @@ func main() {
 	defer session.Close()
 
 	inputs := []string{
+		"vim test.sh\n",
 		"i", "echo \"hello world\"\n",
 		"\033", ":wq\n",
+		"exit\n",
 	}
 
 	fileDescriptor := int(os.Stdin.Fd())
-	if terminal.IsTerminal(fileDescriptor) {
-		originalState, err := terminal.MakeRaw(fileDescriptor)
+	if term.IsTerminal(fileDescriptor) {
+		originalState, err := term.MakeRaw(fileDescriptor)
 		if err != nil {
 			log.Fatal(err)
 
 		}
-		defer terminal.Restore(fileDescriptor, originalState)
+		defer func() {
+			_ = term.Restore(fileDescriptor, originalState)
+		}()
 
 		err = session.RequestPty("xterm-256color", 0, 0, ssh.TerminalModes{
 			ssh.ECHO:          1,     // enable echoing
@@ -109,15 +112,13 @@ func main() {
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
 	session.Stdin = NewTerminalStdin(inputs, os.Stdin)
-	session.Run("vim test.sh")
 
-	time.Sleep(time.Second)
-	// err = session.Shell()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	err = session.Shell()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// // You should now be connected via SSH with a fully-interactive terminal
-	// // This call blocks until the user exits the session (e.g. via CTRL + D)
-	// session.Wait()
+	// You should now be connected via SSH with a fully-interactive terminal
+	// This call blocks until the user exits the session (e.g. via CTRL + D)
+	_ = session.Wait()
 }
