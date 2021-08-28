@@ -11,6 +11,7 @@ type Job struct {
 	Commands     []Command         `json:"commands"`
 	ErrorHandler []Command         `json:"errorHandler"`
 	Env          map[string]string `json:"env"`
+	Config       string            `json:"config"`
 }
 
 type Command struct {

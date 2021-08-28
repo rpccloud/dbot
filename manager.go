@@ -179,7 +179,7 @@ func (p *Manager) runCommand(
 
 	cmdType := command.Type
 	if cmdType == "" {
-		cmdType = "command"
+		cmdType = "cmd"
 	}
 
 	if cmdType == "job" {
@@ -188,7 +188,7 @@ func (p *Manager) runCommand(
 		); ret != nil {
 			return
 		}
-	} else if cmdType == "command" {
+	} else if cmdType == "cmd" {
 		if command.Value != "" {
 			// print the command
 			p.logCH <- newLogRecordCommand(

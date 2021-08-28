@@ -22,10 +22,10 @@
     },
     "nodeInstall": {
       "commands": [
-        {"type": "command", "value": "apt-get update", "inputs": [
+        {"type": "cmd", "value": "apt-get update", "inputs": [
           "y\n"
         ]},
-        {"type": "command", "value": "vim test.sh", "inputs": [
+        {"type": "cmd", "value": "vim test.sh", "inputs": [
           "i", 
           "test\n",
           "test\n",
@@ -36,7 +36,7 @@
     },
     "nodeUninstall": {
       "commands": [
-        {"type": "command", "value": "rm /opt/demo/test.log"}
+        {"type": "cmd", "value": "rm /opt/demo/test.log"}
       ]
     },
     "uninstall": {
