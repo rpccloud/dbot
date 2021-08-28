@@ -23,7 +23,7 @@ func main() {
 	)
 	flag.Parse()
 
-	mgr := dbot.NewManager(configPath, jobName)
-	mgr.Run()
+	mgr := dbot.NewManager()
+	mgr.Run(configPath, jobName)
 	mgr.Close()
 }

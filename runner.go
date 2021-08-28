@@ -78,6 +78,7 @@ func (p *RunnerInput) Read(b []byte) (n int, err error) {
 }
 
 type CommandRunner interface {
+	Name() string
 	RunCommand(
 		jobName string,
 		command string,
@@ -87,6 +88,10 @@ type CommandRunner interface {
 }
 
 type LocalRunner struct{}
+
+func (p *LocalRunner) Name() string {
+	return os.Getenv("USER") + "@local"
+}
 
 func (p *LocalRunner) RunCommand(
 	jobName string,
@@ -141,26 +146,18 @@ func (p *LocalRunner) RunCommand(
 }
 
 type SSHRunner struct {
-	name     string
 	port     uint16
 	user     string
 	host     string
 	password string
 }
 
-func NewSSHRunner(
-	name string, port uint16, user string, host string,
-) (*SSHRunner, error) {
+func NewSSHRunner(port uint16, user string, host string) (*SSHRunner, error) {
 	if port == 0 {
 		port = 22
 	}
 
-	if user == "" {
-		user = os.Getenv("USER")
-	}
-
 	ret := &SSHRunner{
-		name:     name,
 		port:     port,
 		user:     user,
 		host:     host,
@@ -178,6 +175,10 @@ func NewSSHRunner(
 	}
 
 	return ret, nil
+}
+
+func (p *SSHRunner) Name() string {
+	return p.user + "@" + p.host
 }
 
 func (p *SSHRunner) RunCommand(
@@ -222,7 +223,9 @@ func (p *SSHRunner) RunCommand(
 				str, e := ReadStringFromIOReader(stdout)
 				retCH <- e
 				if str != "" {
-					logCH <- newLogRecordInfo(p.name, jobName, "Out: "+str)
+					logCH <- newLogRecordInfo(
+						p.user+"@"+p.host, jobName, "Out: "+str,
+					)
 				}
 			}()
 
@@ -230,7 +233,9 @@ func (p *SSHRunner) RunCommand(
 				str, e := ReadStringFromIOReader(stderr)
 				retCH <- e
 				if str != "" {
-					logCH <- newLogRecordError(p.name, jobName, "Error: "+str)
+					logCH <- newLogRecordError(
+						p.user+"@"+p.host, jobName, "Error: "+str,
+					)
 				}
 			}()
 
