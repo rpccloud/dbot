@@ -89,6 +89,8 @@ type CommandRunner interface {
 
 type LocalRunner struct {
 	name string
+
+	sync.Mutex
 }
 
 func (p *LocalRunner) Name() string {
@@ -101,6 +103,9 @@ func (p *LocalRunner) RunCommand(
 	inputs []string,
 	logCH chan *logRecord,
 ) (ret error) {
+	p.Lock()
+	defer p.Unlock()
+
 	var stdout io.ReadCloser
 	var stderr io.ReadCloser
 
@@ -153,6 +158,8 @@ type SSHRunner struct {
 	user     string
 	host     string
 	password string
+
+	sync.Mutex
 }
 
 func NewSSHRunner(
@@ -196,6 +203,9 @@ func (p *SSHRunner) RunCommand(
 	inputs []string,
 	logCH chan *logRecord,
 ) (ret error) {
+	p.Lock()
+	defer p.Unlock()
+
 	var client *ssh.Client
 	var session *ssh.Session
 
