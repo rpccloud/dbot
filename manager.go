@@ -173,24 +173,24 @@ func (p *Manager) prepareJob(
 	configPath string,
 	parentDebug []string,
 ) error {
+	currentDebug := append(parentDebug, p.getJobFullPath(configPath, jobName))
+
 	// get config absolute path
 	absConfigPath, e := filepath.Abs(configPath)
 	if e != nil {
 		return e
 	}
 
-	currentDebug := append(parentDebug, p.getJobFullPath(configPath, jobName))
-
 	// load config
 	config, ok := p.configMap[absConfigPath]
 	if !ok {
-		emptyConfig := Config{}
+		jsonConfig := Config{}
 		if configBytes, e := ioutil.ReadFile(absConfigPath); e != nil {
 			return e
-		} else if e := json.Unmarshal(configBytes, &emptyConfig); e != nil {
+		} else if e := json.Unmarshal(configBytes, &jsonConfig); e != nil {
 			return e
 		} else {
-			config = &emptyConfig
+			config = &jsonConfig
 			p.configMap[absConfigPath] = config
 		}
 	}
@@ -202,10 +202,13 @@ func (p *Manager) prepareJob(
 		for _, cmd := range commands {
 			if cmd.RunAt != "" && cmd.RunAt != "local" {
 				if remote, ok := config.Remotes[cmd.RunAt]; ok {
-					userHost := fmt.Sprintf("%s@%s", remote.User, remote.Host)
+					userHost := remote.User + "@" + remote.Host
 					if _, ok := p.runnerMap[userHost]; !ok {
 						ssh, e := NewSSHRunner(
-							remote.Port, remote.User, remote.Host,
+							userHost,
+							remote.Port,
+							remote.User,
+							remote.Host,
 						)
 						if e != nil {
 							return e

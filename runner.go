@@ -148,18 +148,25 @@ func (p *LocalRunner) RunCommand(
 }
 
 type SSHRunner struct {
+	name     string
 	port     uint16
 	user     string
 	host     string
 	password string
 }
 
-func NewSSHRunner(port uint16, user string, host string) (*SSHRunner, error) {
+func NewSSHRunner(
+	name string,
+	port uint16,
+	user string,
+	host string,
+) (*SSHRunner, error) {
 	if port == 0 {
 		port = 22
 	}
 
 	ret := &SSHRunner{
+		name:     name,
 		port:     port,
 		user:     user,
 		host:     host,
@@ -180,7 +187,7 @@ func NewSSHRunner(port uint16, user string, host string) (*SSHRunner, error) {
 }
 
 func (p *SSHRunner) Name() string {
-	return p.user + "@" + p.host
+	return p.name
 }
 
 func (p *SSHRunner) RunCommand(
