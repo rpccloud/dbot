@@ -40,67 +40,6 @@ func NewManager() *Manager {
 	return ret
 }
 
-// func (p *Manager) Close() {
-// 	p.Lock()
-// 	defer p.Unlock()
-
-// 	if p.closeCH != nil {
-// 		for len(p.logCH) != 0 {
-// 			time.Sleep(100 * time.Millisecond)
-// 		}
-
-// 		close(p.logCH)
-// 		<-p.closeCH
-// 		p.closeCH = nil
-// 	}
-// }
-
-// func (p *Manager) printLog() {
-// 	defer func() {
-// 		p.closeCH <- true
-// 	}()
-
-// 	for {
-// 		if log, ok := <-p.logCH; !ok {
-// 			return
-// 		} else {
-// 			if log.body != "" {
-// 				switch log.level {
-// 				case recordLevelInfo:
-// 					if !FilterString(log.body, outFilter) {
-// 						headInfoColor.Printf(
-// 							"%s => %s: ", log.runAt, log.jobName,
-// 						)
-// 						bodyInfoColor.Print(log.body)
-// 					}
-// 				case recordLevelError:
-// 					if !FilterString(log.body, errFilter) {
-// 						headErrorColor.Printf(
-// 							"%s => %s: ", log.runAt, log.jobName,
-// 						)
-// 						bodyErrorColor.Print(log.body)
-// 					}
-
-// 				case recordLevelJob:
-// 					headJobColor.Printf(
-// 						"%s => %s: ", log.runAt, log.jobName,
-// 					)
-// 					bodyJobColor.Print(log.body)
-// 				case recordLevelCommand:
-// 					headCommandColor.Printf(
-// 						"%s => %s: ", log.runAt, log.jobName,
-// 					)
-// 					bodyCommandColor.Print(log.body)
-// 				}
-// 			}
-// 		}
-// 	}
-// }
-
-// func (p *Manager) reportError(e error) {
-// 	p.logCH <- newLogRecordError("dbot", "core", e.Error())
-// }
-
 func (p *Manager) getConfig(configPath string) (*Config, error) {
 	if absConfigPath, e := filepath.Abs(configPath); e != nil {
 		return nil, e
