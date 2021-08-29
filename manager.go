@@ -6,9 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -28,88 +25,81 @@ var errFilter = []string{
 }
 
 type Manager struct {
-	logCH     chan *logRecord
 	runnerMap map[string]CommandRunner
 	configMap map[string]*Config
-	closeCH   chan bool
-	sync.Mutex
 }
 
 func NewManager() *Manager {
 	ret := &Manager{
-		logCH:     make(chan *logRecord, 65536),
 		runnerMap: make(map[string]CommandRunner),
 		configMap: make(map[string]*Config),
-		closeCH:   make(chan bool, 1),
 	}
 
 	ret.runnerMap["local"] = &LocalRunner{name: os.Getenv("USER") + "@local"}
 
-	go ret.printLog()
-
 	return ret
 }
 
-func (p *Manager) Close() {
-	p.Lock()
-	defer p.Unlock()
+// func (p *Manager) Close() {
+// 	p.Lock()
+// 	defer p.Unlock()
 
-	if p.closeCH != nil {
-		for len(p.logCH) != 0 {
-			time.Sleep(100 * time.Millisecond)
-		}
+// 	if p.closeCH != nil {
+// 		for len(p.logCH) != 0 {
+// 			time.Sleep(100 * time.Millisecond)
+// 		}
 
-		close(p.logCH)
-		<-p.closeCH
-		p.closeCH = nil
-	}
-}
+// 		close(p.logCH)
+// 		<-p.closeCH
+// 		p.closeCH = nil
+// 	}
+// }
 
-func (p *Manager) printLog() {
-	defer func() {
-		p.closeCH <- true
-	}()
+// func (p *Manager) printLog() {
+// 	defer func() {
+// 		p.closeCH <- true
+// 	}()
 
-	for {
-		if log, ok := <-p.logCH; !ok {
-			return
-		} else {
-			if log.body != "" {
-				switch log.level {
-				case recordLevelInfo:
-					if !FilterString(log.body, outFilter) {
-						headInfoColor.Printf(
-							"%s => %s: ", log.runAt, log.jobName,
-						)
-						bodyInfoColor.Print(log.body)
-					}
-				case recordLevelError:
-					if !FilterString(log.body, errFilter) {
-						headErrorColor.Printf(
-							"%s => %s: ", log.runAt, log.jobName,
-						)
-						bodyErrorColor.Print(log.body)
-					}
+// 	for {
+// 		if log, ok := <-p.logCH; !ok {
+// 			return
+// 		} else {
+// 			if log.body != "" {
+// 				switch log.level {
+// 				case recordLevelInfo:
+// 					if !FilterString(log.body, outFilter) {
+// 						headInfoColor.Printf(
+// 							"%s => %s: ", log.runAt, log.jobName,
+// 						)
+// 						bodyInfoColor.Print(log.body)
+// 					}
+// 				case recordLevelError:
+// 					if !FilterString(log.body, errFilter) {
+// 						headErrorColor.Printf(
+// 							"%s => %s: ", log.runAt, log.jobName,
+// 						)
+// 						bodyErrorColor.Print(log.body)
+// 					}
 
-				case recordLevelJob:
-					headJobColor.Printf(
-						"%s => %s: ", log.runAt, log.jobName,
-					)
-					bodyJobColor.Print(log.body)
-				case recordLevelCommand:
-					headCommandColor.Printf(
-						"%s => %s: ", log.runAt, log.jobName,
-					)
-					bodyCommandColor.Print(log.body)
-				}
-			}
-		}
-	}
-}
+// 				case recordLevelJob:
+// 					headJobColor.Printf(
+// 						"%s => %s: ", log.runAt, log.jobName,
+// 					)
+// 					bodyJobColor.Print(log.body)
+// 				case recordLevelCommand:
+// 					headCommandColor.Printf(
+// 						"%s => %s: ", log.runAt, log.jobName,
+// 					)
+// 					bodyCommandColor.Print(log.body)
+// 				}
+// 			}
+// 		}
+// 	}
+// }
 
-func (p *Manager) reportError(e error) {
-	p.logCH <- newLogRecordError("dbot", "core", e.Error())
-}
+// func (p *Manager) reportError(e error) {
+// 	p.logCH <- newLogRecordError("dbot", "core", e.Error())
+// }
 
 func (p *Manager) getConfig(configPath string) (*Config, error) {
 	if absConfigPath, e := filepath.Abs(configPath); e != nil {
@@ -246,25 +236,14 @@ func (p *Manager) prepareJob(
 }
 
 func (p *Manager) Run(configPath string, jobName string) bool {
-	p.Lock()
-	defer p.Unlock()
-
 	if e := p.prepareJob(jobName, configPath, []string{}); e != nil {
-		p.reportError(e)
+		LogError(os.Getenv("User")+"@dbot => loading config", e)
 		return false
 	} else if runner, e := p.getRunner(configPath, "local"); e != nil {
-		p.reportError(e)
-		return false
-	} else if e := p.runJob(
-		configPath,
-		jobName,
-		Env{},
-		runner,
-	); e != nil {
-		p.reportError(e)
+		LogError(os.Getenv("User")+"@dbot => get local runner", e)
 		return false
 	} else {
-		return true
+		return p.runJob(configPath, jobName, Env{}, runner)
 	}
 }
 
@@ -274,12 +253,17 @@ func (p *Manager) runCommand(
 	jobEnv Env,
 	command Command,
 	defaultRunner CommandRunner,
-) (ret error) {
+) bool {
+	head := defaultRunner.Name() + " => " + jobName + ": "
+
 	runner := defaultRunner
 	if command.On != "" {
-		if runner, ret = p.getRunner(jobConfig, command.On); ret != nil {
-			return
+		v, e := p.getRunner(jobConfig, command.On)
+		if e != nil {
+			LogError(head, e)
+			return false
 		}
+		runner = v
 	}
 
 	cmdType := command.Type
@@ -294,37 +278,22 @@ func (p *Manager) runCommand(
 		if cmdConfig == "" {
 			cmdConfig = jobConfig
 		}
-		if ret = p.runJob(
+		return p.runJob(
 			cmdConfig,
 			env.parseString(command.Exec),
-			env.parseEnv(command.Env),
+			jobEnv.parseEnv(command.Env),
 			runner,
-		); ret != nil {
-			return
-		}
+		)
 	} else if cmdType == "cmd" {
-		if command.Exec != "" {
-			// print the command
-			p.logCH <- newLogRecordCommand(
-				runner.Name(),
-				jobName,
-				"Command: "+env.parseString(command.Exec)+"\n",
-			)
-
-			if ret = runner.RunCommand(
-				jobName,
-				env.parseString(command.Exec),
-				env.parseStringArray(command.Inputs),
-				p.logCH,
-			); ret != nil {
-				return
-			}
-		}
+		return runner.RunCommand(
+			jobName,
+			env.parseString(command.Exec),
+			env.parseStringArray(command.Inputs),
+		)
 	} else {
-		ret = fmt.Errorf("unknown command type %s", cmdType)
+		LogError(head, fmt.Errorf("unknown command type %s", cmdType))
+		return false
 	}
-
-	return
 }
 
 func (p *Manager) runJob(
@@ -332,24 +301,21 @@ func (p *Manager) runJob(
 	jobName string,
 	runningEnv Env,
 	defaultRunner CommandRunner,
-) error {
-	// report job message
-	startMsg := "Job Start!\n"
-	endMsg := "Job End!\n"
-
-	p.logCH <- newLogRecordJob(defaultRunner.Name(), jobName, startMsg)
-	defer func() {
-		p.logCH <- newLogRecordJob(defaultRunner.Name(), jobName, endMsg)
-	}()
+) bool {
+	head := defaultRunner.Name() + " => " + jobName + ": "
+	LogNotice(head, "Start Job: "+jobConfig+" => "+jobName+"\n")
+	defer LogNotice(head, "End Job: "+jobConfig+" => "+jobName+"\n")
 
 	config, e := p.getConfig(jobConfig)
 	if e != nil {
-		return e
+		LogError(head, e)
+		return false
 	}
 
 	job, e := p.getJob(jobConfig, jobName)
 	if e != nil {
-		return e
+		LogError(head, e)
+		return false
 	}
 
 	concurrency := job.Concurrency
@@ -360,43 +326,34 @@ func (p *Manager) runJob(
 	if !concurrency {
 		for i := 0; i < len(commands); i++ {
 			command := commands[i]
-			if e := p.runCommand(
-				jobConfig,
-				jobName,
-				env,
-				command,
-				defaultRunner,
-			); e != nil {
-				return e
+			if !p.runCommand(jobConfig, jobName, env, command, defaultRunner) {
+				return false
 			}
 		}
+
+		return true
 	} else {
-		evalCount := int64(len(commands))
-		errCH := make(chan error, len(commands))
+		retCH := make(chan bool, len(commands))
 
 		for i := 0; i < len(commands); i++ {
 			go func(command Command) {
-				if e := p.runCommand(
+				retCH <- p.runCommand(
 					jobConfig,
 					jobName,
 					env,
 					command,
 					defaultRunner,
-				); e != nil {
-					errCH <- e
-				}
-				atomic.AddInt64(&evalCount, -1)
+				)
 			}(commands[i])
 		}
 
-		for atomic.LoadInt64(&evalCount) > 0 {
-			time.Sleep(100 * time.Millisecond)
+		ret := true
+		for i := 0; i < len(commands); i++ {
+			if !<-retCH {
+				ret = false
+			}
 		}
 
-		if len(errCH) != 0 {
-			return <-errCH
-		}
+		return ret
 	}
-
-	return nil
 }

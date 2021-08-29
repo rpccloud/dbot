@@ -87,5 +87,4 @@ func main() {
 
 	mgr := dbot.NewManager()
 	mgr.Run(configPath, jobName)
-	mgr.Close()
 }

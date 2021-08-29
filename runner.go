@@ -83,8 +83,7 @@ type CommandRunner interface {
 		jobName string,
 		command string,
 		inputs []string,
-		logCH chan *logRecord,
-	) error
+	) bool
 }
 
 type LocalRunner struct {
@@ -101,55 +100,56 @@ func (p *LocalRunner) RunCommand(
 	jobName string,
 	command string,
 	inputs []string,
-	logCH chan *logRecord,
-) (ret error) {
+) bool {
 	p.Lock()
 	defer p.Unlock()
 
-	var stdout io.ReadCloser
-	var stderr io.ReadCloser
-
+	head := p.Name() + " => " + jobName + ": "
 	cmdArray := strings.Fields(command)
 	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
-
-	if stdout, ret = cmd.StdoutPipe(); ret != nil {
-		return
-	} else if stderr, ret = cmd.StderrPipe(); ret != nil {
-		_ = stdout.Close()
-		return
-	} else {
-		retCH := make(chan error, 2)
-
-		go func() {
-			str, e := ReadStringFromIOReader(stdout)
-			_ = stdout.Close()
-			retCH <- e
-			if str != "" {
-				logCH <- newLogRecordInfo(p.Name(), jobName, "Out: "+str)
-			}
-		}()
-
-		go func() {
-			str, e := ReadStringFromIOReader(stderr)
-			_ = stderr.Close()
-			retCH <- e
-			if str != "" {
-				logCH <- newLogRecordError(p.Name(), jobName, "Error: "+str)
-			}
-		}()
-
-		cmd.Stdin = NewRunnerInput(inputs, nil)
-		ret = cmd.Run()
-
-		// wait for all goroutines
-		for i := 0; i < 2; i++ {
-			if e := <-retCH; e != nil && ret == nil {
-				ret = e
-			}
-		}
-
-		return ret
+	stdout, e := cmd.StdoutPipe()
+	if e != nil {
+		LogError(head, e)
+		return false
 	}
+	stderr, e := cmd.StderrPipe()
+	if e != nil {
+		_ = stdout.Close()
+		LogError(head, e)
+		return false
+	}
+
+	waitCH := make(chan bool, 2)
+
+	go func() {
+		str, _ := ReadStringFromIOReader(stdout)
+		_ = stdout.Close()
+		if str != "" && !FilterString(str, outFilter) {
+			LogCommandOut(head, command, str)
+		}
+		waitCH <- true
+	}()
+
+	go func() {
+		str, _ := ReadStringFromIOReader(stderr)
+		_ = stderr.Close()
+		if str != "" && !FilterString(str, errFilter) {
+			LogCommandErr(head, command, str)
+		}
+		waitCH <- true
+	}()
+
+	cmd.Stdin = NewRunnerInput(inputs, nil)
+
+	e = cmd.Run()
+	if e != nil {
+		LogCommandErr(head, command, e.Error())
+	}
+
+	<-waitCH
+	<-waitCH
+
+	return e == nil
 }
 
 type SSHRunner struct {
@@ -187,7 +187,7 @@ func NewSSHRunner(
 	_ = client.Close()
 
 	if ret.password == "" {
-		_, _ = authColor.Printf("Use PublicKey on %s@%s\n", ret.user, ret.host)
+		LogAuth(fmt.Sprintf("Use PublicKey on %s@%s\n", ret.user, ret.host))
 	}
 
 	return ret, nil
@@ -201,73 +201,65 @@ func (p *SSHRunner) RunCommand(
 	jobName string,
 	command string,
 	inputs []string,
-	logCH chan *logRecord,
-) (ret error) {
+) bool {
 	p.Lock()
 	defer p.Unlock()
 
-	var client *ssh.Client
-	var session *ssh.Session
+	head := p.Name() + " => " + jobName + ": "
 
-	defer func() {
-		if session != nil {
-			if e := session.Close(); e != nil && e != io.EOF && ret == nil {
-				ret = e
-			}
-		}
-
-		if client != nil {
-			if e := client.Close(); e != nil && e != io.EOF && ret == nil {
-				ret = e
-			}
-		}
-	}()
-
-	if client, ret = p.getClient(SSHAuthIdle); ret != nil {
-		return
-	} else if session, ret = client.NewSession(); ret != nil {
-		return
+	if client, e := p.getClient(SSHAuthIdle); e != nil {
+		LogError(head, e)
+		return false
+	} else if session, e := client.NewSession(); e != nil {
+		_ = client.Close()
+		LogError(head, e)
+		return false
 	} else {
-		var stdout io.Reader
-		var stderr io.Reader
+		defer func() {
+			_ = session.Close()
+			_ = client.Close()
+		}()
 
-		if stdout, ret = session.StdoutPipe(); ret != nil {
-			return
-		} else if stderr, ret = session.StderrPipe(); ret != nil {
-			return
-		} else {
-			retCH := make(chan error, 2)
-
-			go func() {
-				str, e := ReadStringFromIOReader(stdout)
-				retCH <- e
-				if str != "" {
-					logCH <- newLogRecordInfo(
-						p.Name(), jobName, "Out: "+str,
-					)
-				}
-			}()
-
-			go func() {
-				str, e := ReadStringFromIOReader(stderr)
-				retCH <- e
-				if str != "" {
-					logCH <- newLogRecordError(
-						p.Name(), jobName, "Error: "+str,
-					)
-				}
-			}()
-
-			session.Stdin = NewRunnerInput(inputs, nil)
-			ret = session.Run(command)
-			// wait for all goroutines
-			for i := 0; i < 2; i++ {
-				if e := <-retCH; e != nil && ret == nil {
-					ret = e
-				}
-			}
-			return ret
+		stdout, e := session.StdoutPipe()
+		if e != nil {
+			LogError(head, e)
+			return false
 		}
+		stderr, e := session.StderrPipe()
+		if e != nil {
+			LogError(head, e)
+			return false
+		}
+
+		waitCH := make(chan bool, 2)
+
+		go func() {
+			str, _ := ReadStringFromIOReader(stdout)
+			if str != "" && !FilterString(str, outFilter) {
+				LogCommandOut(head, command, str)
+			}
+			waitCH <- true
+		}()
+
+		go func() {
+			str, _ := ReadStringFromIOReader(stderr)
+			if str != "" && !FilterString(str, errFilter) {
+				LogCommandErr(head, command, str)
+			}
+			waitCH <- true
+		}()
+
+		session.Stdin = NewRunnerInput(inputs, nil)
+
+		e = session.Run(command)
+		if e != nil {
+			LogError(head, e)
+		}
+
+		<-waitCH
+		<-waitCH
+
+		return e == nil
 	}
 }
 

@@ -5,74 +5,63 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/fatih/color"
 	"golang.org/x/term"
 )
 
-var (
-	authColor        = color.New(color.FgMagenta, color.Bold)
-	headInfoColor    = color.New(color.FgGreen, color.Bold)
-	headErrorColor   = color.New(color.FgRed, color.Bold)
-	headJobColor     = color.New(color.FgYellow, color.Bold)
-	headCommandColor = color.New(color.FgGreen, color.Bold)
-	bodyInfoColor    = color.New(color.FgBlue, color.Bold)
-	bodyErrorColor   = color.New(color.FgRed, color.Bold)
-	bodyJobColor     = color.New(color.FgYellow, color.Bold)
-	bodyCommandColor = color.New(color.FgGreen, color.Bold)
-)
+var gLogLock sync.Mutex
 
-type logRecordLevel int
-
-const (
-	recordLevelInfo logRecordLevel = iota
-	recordLevelError
-	recordLevelCommand
-	recordLevelJob
-)
-
-type logRecord struct {
-	level   logRecordLevel
-	runAt   string
-	jobName string
-	body    string
-}
-
-func newLogRecordInfo(runAt string, jobName string, body string) *logRecord {
-	return &logRecord{
-		level:   recordLevelInfo,
-		runAt:   runAt,
-		jobName: jobName,
-		body:    body,
+func getStandradOut(s string) string {
+	if s != "" && s[len(s)-1] != '\n' {
+		return s + "\n"
+	} else {
+		return s
 	}
 }
 
-func newLogRecordError(runAt string, jobName string, body string) *logRecord {
-	return &logRecord{
-		level:   recordLevelError,
-		runAt:   runAt,
-		jobName: jobName,
-		body:    body,
+func log(a ...interface{}) {
+	gLogLock.Lock()
+	defer gLogLock.Unlock()
+
+	for i := 0; i < len(a); i += 2 {
+		if s := a[i].(string); s != "" {
+			_, _ = color.New(a[i+1].(color.Attribute), color.Bold).Print(s)
+		}
+
 	}
 }
 
-func newLogRecordCommand(runAt string, jobName string, body string) *logRecord {
-	return &logRecord{
-		level:   recordLevelCommand,
-		runAt:   runAt,
-		jobName: jobName,
-		body:    body,
-	}
+func LogAuth(auth string) {
+	log(auth, color.FgMagenta)
 }
 
-func newLogRecordJob(runAt string, jobName string, body string) *logRecord {
-	return &logRecord{
-		level:   recordLevelJob,
-		runAt:   runAt,
-		jobName: jobName,
-		body:    body,
-	}
+func LogError(head string, e error) {
+	log(head, color.FgRed, getStandradOut(e.Error()), color.FgRed)
+}
+
+func LogNotice(head string, body string) {
+	log(head, color.FgGreen, body, color.FgYellow)
+}
+
+func LogCommandOut(head string, commnad string, out string) {
+	log(
+		head, color.FgGreen,
+		commnad, color.FgYellow,
+		" => \n", color.FgGreen,
+		getStandradOut(out), color.FgBlue,
+	)
+}
+
+func LogCommandErr(head string, commnad string, out string) {
+	log(
+		head, color.FgRed,
+		commnad, color.FgRed,
+		" => \n", color.FgRed,
+		getStandradOut(out), color.FgRed,
+	)
 }
 
 func ReadStringFromIOReader(reader io.Reader) (string, error) {
@@ -86,7 +75,7 @@ func ReadStringFromIOReader(reader io.Reader) (string, error) {
 }
 
 func GetPasswordFromUser(head string) (string, error) {
-	_, _ = authColor.Print(head)
+	LogAuth(head)
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 	if err != nil {

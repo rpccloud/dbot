@@ -23,6 +23,9 @@ jobs:
       on: local
     - type: job
       exec: nodeInstall
+      on: local
+    - type: job
+      exec: nodeInstall
       on: dev81
     - type: job
       exec: nodeInstall
