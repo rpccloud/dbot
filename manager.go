@@ -41,9 +41,7 @@ func NewManager() *Manager {
 }
 
 func (p *Manager) getConfig(configPath string) (*Config, error) {
-	if absConfigPath, e := filepath.Abs(configPath); e != nil {
-		return nil, e
-	} else if config, ok := p.configMap[absConfigPath]; !ok {
+	if config, ok := p.configMap[configPath]; !ok {
 		return nil, fmt.Errorf("could not find config \"%s\"", configPath)
 	} else {
 		return config, nil
@@ -63,11 +61,7 @@ func (p *Manager) getJob(configPath string, jobName string) (*Job, error) {
 }
 
 func (p *Manager) getJobFullPath(configPath string, jobName string) string {
-	if absConfigPath, e := filepath.Abs(configPath); e != nil {
-		return ""
-	} else {
-		return absConfigPath + " => jobs => " + jobName
-	}
+	return configPath + " => jobs => " + jobName
 }
 
 func (p *Manager) getRunner(
@@ -95,22 +89,16 @@ func (p *Manager) prepareJob(
 ) error {
 	currentDebug := append(parentDebug, p.getJobFullPath(configPath, jobName))
 
-	// get config absolute path
-	absConfigPath, e := filepath.Abs(configPath)
-	if e != nil {
-		return e
-	}
-
 	// load config
-	config, ok := p.configMap[absConfigPath]
+	config, ok := p.configMap[configPath]
 	if !ok {
 		jsonConfig := Config{}
-		configBytes, e := ioutil.ReadFile(absConfigPath)
+		configBytes, e := ioutil.ReadFile(configPath)
 		if e != nil {
 			return e
 		}
 
-		ext := filepath.Ext(absConfigPath)
+		ext := filepath.Ext(configPath)
 		if ext == ".json" {
 			if e := json.Unmarshal(configBytes, &jsonConfig); e != nil {
 				return e
@@ -122,12 +110,12 @@ func (p *Manager) prepareJob(
 		} else {
 			return fmt.Errorf(
 				"illegal config file extension \"%s\"",
-				absConfigPath,
+				configPath,
 			)
 		}
 
 		config = &jsonConfig
-		p.configMap[absConfigPath] = config
+		p.configMap[configPath] = config
 	}
 
 	// prepare job
@@ -152,15 +140,24 @@ func (p *Manager) prepareJob(
 					return fmt.Errorf(
 						"remote \"%s\" is not found in config \"%s\"",
 						cmd.On,
-						absConfigPath,
+						configPath,
 					)
 				}
 			}
 
 			if cmd.Type == "job" {
-				cmdConfig := cmd.Config
-				if cmdConfig == "" {
-					cmdConfig = configPath
+				cmdConfig := configPath
+				if cmd.Config != "" {
+					var e error
+					cmdConfig, e = GetAbsConfigPathFrom(configPath, cmd.Config)
+					if e != nil {
+						return fmt.Errorf(
+							"\"%s\" is invalid in config file \"%s\" error: %s",
+							cmd.Config,
+							configPath,
+							e.Error(),
+						)
+					}
 				}
 				if e := p.prepareJob(
 					cmd.Exec, cmdConfig, currentDebug,
@@ -175,14 +172,17 @@ func (p *Manager) prepareJob(
 }
 
 func (p *Manager) Run(configPath string, jobName string) bool {
-	if e := p.prepareJob(jobName, configPath, []string{}); e != nil {
+	if absConfigPath, e := filepath.Abs(configPath); e != nil {
 		LogError(os.Getenv("User")+"@dbot => loading config", e)
 		return false
-	} else if runner, e := p.getRunner(configPath, "local"); e != nil {
+	} else if e := p.prepareJob(jobName, absConfigPath, []string{}); e != nil {
+		LogError(os.Getenv("User")+"@dbot => loading config", e)
+		return false
+	} else if runner, e := p.getRunner(absConfigPath, "local"); e != nil {
 		LogError(os.Getenv("User")+"@dbot => get local runner", e)
 		return false
 	} else {
-		return p.runJob(configPath, jobName, Env{}, runner)
+		return p.runJob(absConfigPath, jobName, Env{}, runner)
 	}
 }
 
@@ -190,14 +190,14 @@ func (p *Manager) runCommand(
 	jobConfig string,
 	jobName string,
 	jobEnv Env,
-	command Command,
+	cmd Command,
 	defaultRunner CommandRunner,
 ) bool {
 	head := defaultRunner.Name() + " => " + jobName + ": "
 
 	runner := defaultRunner
-	if command.On != "" {
-		v, e := p.getRunner(jobConfig, command.On)
+	if cmd.On != "" {
+		v, e := p.getRunner(jobConfig, cmd.On)
 		if e != nil {
 			LogError(head, e)
 			return false
@@ -205,29 +205,40 @@ func (p *Manager) runCommand(
 		runner = v
 	}
 
-	cmdType := command.Type
+	cmdType := cmd.Type
 	if cmdType == "" {
 		cmdType = "cmd"
 	}
 
-	env := jobEnv.merge(command.Env)
+	env := jobEnv.merge(cmd.Env)
 
 	if cmdType == "job" {
-		cmdConfig := command.Config
-		if cmdConfig == "" {
-			cmdConfig = jobConfig
+		cmdConfig := jobConfig
+		if cmd.Config != "" {
+			var e error
+			cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
+			if e != nil {
+				LogError(head, fmt.Errorf(
+					"\"%s\" is invalid in config file \"%s\" error: %s",
+					cmd.Config,
+					jobConfig,
+					e.Error(),
+				))
+				return false
+			}
 		}
+
 		return p.runJob(
 			cmdConfig,
-			env.parseString(command.Exec),
-			jobEnv.parseEnv(command.Env),
+			env.parseString(cmd.Exec),
+			jobEnv.parseEnv(cmd.Env),
 			runner,
 		)
 	} else if cmdType == "cmd" {
 		return runner.RunCommand(
 			jobName,
-			env.parseString(command.Exec),
-			env.parseStringArray(command.Inputs),
+			env.parseString(cmd.Exec),
+			env.parseStringArray(cmd.Inputs),
 		)
 	} else {
 		LogError(head, fmt.Errorf("unknown command type %s", cmdType))

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -92,4 +93,13 @@ func FilterString(str string, filter []string) bool {
 	}
 
 	return false
+}
+
+func GetAbsConfigPathFrom(
+	currentAbsConfig string,
+	relativePath string,
+) (string, error) {
+	return filepath.Abs(
+		filepath.Join(filepath.Dir(currentAbsConfig), relativePath),
+	)
 }
