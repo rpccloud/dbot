@@ -13,7 +13,7 @@ import (
 	"github.com/fatih/color"
 )
 
-var rootEnv = map[string]string{
+var rootEnv = Env{
 	"KeyESC":   "\033",
 	"KeyEnter": "\n",
 }
@@ -244,16 +244,13 @@ func (p *Manager) Run(configPath string, jobName string) bool {
 	if e := p.prepareJob(jobName, configPath, []string{}); e != nil {
 		p.reportError(e)
 		return false
-	} else if config, e := p.getConfig(configPath); e != nil {
-		p.reportError(e)
-		return false
 	} else if runner, e := p.getRunner(configPath, "local"); e != nil {
 		p.reportError(e)
 		return false
 	} else if e := p.runJob(
 		configPath,
 		jobName,
-		MergeEnv(rootEnv, config.Env),
+		Env{},
 		false,
 		runner,
 	); e != nil {
@@ -267,7 +264,7 @@ func (p *Manager) Run(configPath string, jobName string) bool {
 func (p *Manager) runCommand(
 	jobConfig string,
 	jobName string,
-	env map[string]string,
+	jobEnv Env,
 	command Command,
 	defaultRunner CommandRunner,
 ) (ret error) {
@@ -283,13 +280,19 @@ func (p *Manager) runCommand(
 		cmdType = "cmd"
 	}
 
+	env := jobEnv.merge(command.Env)
+
 	if cmdType == "job" {
 		cmdConfig := command.Config
 		if cmdConfig == "" {
 			cmdConfig = jobConfig
 		}
 		if ret = p.runJob(
-			cmdConfig, command.Value, env, false, runner,
+			cmdConfig,
+			env.parseString(command.Value),
+			env.parseEnv(command.Env),
+			false,
+			runner,
 		); ret != nil {
 			return
 		}
@@ -299,19 +302,13 @@ func (p *Manager) runCommand(
 			p.logCH <- newLogRecordCommand(
 				runner.Name(),
 				jobName,
-				"Command: "+command.Value+"\n",
+				"Command: "+env.parseString(command.Value)+"\n",
 			)
-
-			// parse inputs
-			inputs := make([]string, len(command.Inputs))
-			for i := 0; i < len(command.Inputs); i++ {
-				inputs[i] = ReplaceStringByEnv(command.Inputs[i], env)
-			}
 
 			if ret = runner.RunCommand(
 				jobName,
-				ReplaceStringByEnv(command.Value, env),
-				inputs,
+				env.parseString(command.Value),
+				env.parseStringArray(command.Inputs),
 				p.logCH,
 			); ret != nil {
 				return
@@ -327,7 +324,7 @@ func (p *Manager) runCommand(
 func (p *Manager) runJob(
 	jobConfig string,
 	jobName string,
-	jobEnv map[string]string,
+	runningEnv Env,
 	isHandlerError bool,
 	defaultRunner CommandRunner,
 ) error {
@@ -345,6 +342,11 @@ func (p *Manager) runJob(
 		p.logCH <- newLogRecordJob(defaultRunner.Name(), jobName, endMsg)
 	}()
 
+	config, e := p.getConfig(jobConfig)
+	if e != nil {
+		return e
+	}
+
 	job, e := p.getJob(jobConfig, jobName)
 	if e != nil {
 		return e
@@ -355,6 +357,7 @@ func (p *Manager) runJob(
 		commands = job.ErrorHandler
 		concurrency = false
 	}
+	env := rootEnv.merge(config.Env).merge(job.Env).merge(runningEnv)
 
 	if !concurrency {
 		for i := 0; i < len(commands); i++ {
@@ -362,7 +365,7 @@ func (p *Manager) runJob(
 			if e := p.runCommand(
 				jobConfig,
 				jobName,
-				MergeEnv(jobEnv, command.Env),
+				env,
 				command,
 				defaultRunner,
 			); e != nil {
@@ -370,7 +373,7 @@ func (p *Manager) runJob(
 					_ = p.runJob(
 						jobConfig,
 						jobName,
-						jobEnv,
+						env,
 						true,
 						defaultRunner,
 					)
@@ -387,7 +390,7 @@ func (p *Manager) runJob(
 				if e := p.runCommand(
 					jobConfig,
 					jobName,
-					MergeEnv(jobEnv, command.Env),
+					env,
 					command,
 					defaultRunner,
 				); e != nil {
@@ -403,7 +406,7 @@ func (p *Manager) runJob(
 
 		if len(errCH) != 0 {
 			if !isHandlerError && len(job.ErrorHandler) > 0 {
-				_ = p.runJob(jobConfig, jobName, jobEnv, true, defaultRunner)
+				_ = p.runJob(jobConfig, jobName, env, true, defaultRunner)
 			}
 			return <-errCH
 		}

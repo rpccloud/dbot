@@ -13,29 +13,56 @@ import (
 
 var authColor = color.New(color.FgMagenta, color.Bold)
 
-func MergeEnv(
-	parentEvn map[string]string,
-	env map[string]string,
-) map[string]string {
-	ret := make(map[string]string)
-	for key, value := range parentEvn {
-		ret[key] = value
-	}
+type logRecordLevel int
 
-	for key, value := range env {
-		ret[key] = value
-	}
+const (
+	recordLevelInfo logRecordLevel = iota
+	recordLevelError
+	recordLevelCommand
+	recordLevelJob
+)
 
-	return ret
+type logRecord struct {
+	level   logRecordLevel
+	runAt   string
+	jobName string
+	body    string
 }
 
-func ReplaceStringByEnv(str string, env map[string]string) string {
-	replaceArray := make([]string, 0)
-	for key, value := range env {
-		replaceArray = append(replaceArray, "#["+key+"]", value)
+func newLogRecordInfo(runAt string, jobName string, body string) *logRecord {
+	return &logRecord{
+		level:   recordLevelInfo,
+		runAt:   runAt,
+		jobName: jobName,
+		body:    body,
 	}
-	replacer := strings.NewReplacer(replaceArray...)
-	return replacer.Replace(str)
+}
+
+func newLogRecordError(runAt string, jobName string, body string) *logRecord {
+	return &logRecord{
+		level:   recordLevelError,
+		runAt:   runAt,
+		jobName: jobName,
+		body:    body,
+	}
+}
+
+func newLogRecordCommand(runAt string, jobName string, body string) *logRecord {
+	return &logRecord{
+		level:   recordLevelCommand,
+		runAt:   runAt,
+		jobName: jobName,
+		body:    body,
+	}
+}
+
+func newLogRecordJob(runAt string, jobName string, body string) *logRecord {
+	return &logRecord{
+		level:   recordLevelJob,
+		runAt:   runAt,
+		jobName: jobName,
+		body:    body,
+	}
 }
 
 func ReadStringFromIOReader(reader io.Reader) (string, error) {

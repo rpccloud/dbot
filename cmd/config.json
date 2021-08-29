@@ -23,15 +23,13 @@
     },
     "nodeInstall": {
       "commands": [
-        {"type": "cmd", "value": "apt-get update", "inputs": [
-          "y\n"
-        ]},
-        {"type": "cmd", "value": "vim test.sh", "inputs": [
+        {"value": "apt-get update"},
+        {"value": "vim test.sh", "inputs": [
           "i", 
           "test\n",
           "test\n",
-          "#[CustomValue]\n",
-          "#[KeyESC]:wq\n"
+          "${CustomValue}\n",
+          "${KeyESC}:wq\n"
         ]}
       ]
     },

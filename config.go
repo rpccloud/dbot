@@ -7,19 +7,19 @@ type Remote struct {
 }
 
 type Job struct {
-	Concurrency  bool              `json:"concurrency"`
-	Commands     []Command         `json:"commands"`
-	ErrorHandler []Command         `json:"errorHandler"`
-	Env          map[string]string `json:"env"`
+	Concurrency  bool      `json:"concurrency"`
+	Commands     []Command `json:"commands"`
+	ErrorHandler []Command `json:"errorHandler"`
+	Env          Env       `json:"env"`
 }
 
 type Command struct {
-	Type   string            `json:"type"`
-	Value  string            `json:"value"`
-	RunAt  string            `json:"runAt"`
-	Inputs []string          `json:"inputs"`
-	Env    map[string]string `json:"env"`
-	Config string            `json:"config"`
+	Type   string   `json:"type"`
+	Value  string   `json:"value"`
+	RunAt  string   `json:"runAt"`
+	Inputs []string `json:"inputs"`
+	Env    Env      `json:"env"`
+	Config string   `json:"config"`
 }
 
 type Config struct {
