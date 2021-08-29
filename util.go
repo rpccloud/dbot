@@ -11,7 +11,17 @@ import (
 	"golang.org/x/term"
 )
 
-var authColor = color.New(color.FgMagenta, color.Bold)
+var (
+	authColor        = color.New(color.FgMagenta, color.Bold)
+	headInfoColor    = color.New(color.FgGreen, color.Bold)
+	headErrorColor   = color.New(color.FgRed, color.Bold)
+	headJobColor     = color.New(color.FgYellow, color.Bold)
+	headCommandColor = color.New(color.FgGreen, color.Bold)
+	bodyInfoColor    = color.New(color.FgBlue, color.Bold)
+	bodyErrorColor   = color.New(color.FgRed, color.Bold)
+	bodyJobColor     = color.New(color.FgYellow, color.Bold)
+	bodyCommandColor = color.New(color.FgGreen, color.Bold)
+)
 
 type logRecordLevel int
 

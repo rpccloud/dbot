@@ -1,0 +1,52 @@
+---
+name: install demo
+remotes:
+  dev81:
+    port: 22
+    user: root
+    host: 192.168.1.81
+  dev82:
+    port: 22
+    user: root
+    host: 192.168.1.82
+  dev83:
+    port: 22
+    user: root
+    host: 192.168.1.83
+env:
+  CustomValue: ok
+jobs:
+  install:
+    concurrency: true
+    commands:
+    - exec: echo "use yaml"
+      on: local
+    - type: job
+      exec: nodeInstall
+      on: dev81
+    - type: job
+      exec: nodeInstall
+      on: dev82
+    - type: job
+      exec: nodeInstall
+      on: dev83
+  nodeInstall:
+    commands:
+    - exec: apt-get update
+    - exec: vim test.sh
+      inputs:
+      - i
+      - test\n
+      - test\n
+      - ${CustomValue}\n
+      - ${KeyESC}:wq\n
+  nodeUninstall:
+    commands:
+    - type: cmd
+      exec: rm test.sh
+  uninstall:
+    concurrency: true
+    commands:
+    - type: job
+      exec: nodeUninstall
+      on: dev81

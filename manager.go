@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fatih/color"
+	"gopkg.in/yaml.v2"
 )
 
 var rootEnv = Env{
@@ -69,15 +69,6 @@ func (p *Manager) printLog() {
 	defer func() {
 		p.closeCH <- true
 	}()
-
-	headInfoColor := color.New(color.FgGreen, color.Bold)
-	headErrorColor := color.New(color.FgRed, color.Bold)
-	headJobColor := color.New(color.FgYellow, color.Bold)
-	headCommandColor := color.New(color.FgGreen, color.Bold)
-	bodyInfoColor := color.New(color.FgBlue, color.Bold)
-	bodyErrorColor := color.New(color.FgRed, color.Bold)
-	bodyJobColor := color.New(color.FgYellow, color.Bold)
-	bodyCommandColor := color.New(color.FgGreen, color.Bold)
 
 	for {
 		if log, ok := <-p.logCH; !ok {
@@ -185,23 +176,36 @@ func (p *Manager) prepareJob(
 	config, ok := p.configMap[absConfigPath]
 	if !ok {
 		jsonConfig := Config{}
-		if configBytes, e := ioutil.ReadFile(absConfigPath); e != nil {
+		configBytes, e := ioutil.ReadFile(absConfigPath)
+		if e != nil {
 			return e
-		} else if e := json.Unmarshal(configBytes, &jsonConfig); e != nil {
-			return e
-		} else {
-			config = &jsonConfig
-			p.configMap[absConfigPath] = config
 		}
+
+		ext := filepath.Ext(absConfigPath)
+		if ext == ".json" {
+			if e := json.Unmarshal(configBytes, &jsonConfig); e != nil {
+				return e
+			}
+		} else if ext == ".yml" || ext == ".yaml" {
+			if e := yaml.Unmarshal(configBytes, &jsonConfig); e != nil {
+				return e
+			}
+		} else {
+			return fmt.Errorf(
+				"illegal config file extension \"%s\"",
+				absConfigPath,
+			)
+		}
+
+		config = &jsonConfig
+		p.configMap[absConfigPath] = config
 	}
 
 	// prepare job
 	if job, ok := config.Jobs[jobName]; ok {
-		commands := append(job.Commands, job.ErrorHandler...)
-
-		for _, cmd := range commands {
-			if cmd.RunAt != "" && cmd.RunAt != "local" {
-				if remote, ok := config.Remotes[cmd.RunAt]; ok {
+		for _, cmd := range job.Commands {
+			if cmd.On != "" && cmd.On != "local" {
+				if remote, ok := config.Remotes[cmd.On]; ok {
 					userHost := remote.User + "@" + remote.Host
 					if _, ok := p.runnerMap[userHost]; !ok {
 						ssh, e := NewSSHRunner(
@@ -216,7 +220,11 @@ func (p *Manager) prepareJob(
 						p.runnerMap[userHost] = ssh
 					}
 				} else {
-					return fmt.Errorf("remote \"%s\" is not found", cmd.RunAt)
+					return fmt.Errorf(
+						"remote \"%s\" is not found in config \"%s\"",
+						cmd.On,
+						absConfigPath,
+					)
 				}
 			}
 
@@ -226,7 +234,7 @@ func (p *Manager) prepareJob(
 					cmdConfig = configPath
 				}
 				if e := p.prepareJob(
-					cmd.Value, cmdConfig, currentDebug,
+					cmd.Exec, cmdConfig, currentDebug,
 				); e != nil {
 					return e
 				}
@@ -251,7 +259,6 @@ func (p *Manager) Run(configPath string, jobName string) bool {
 		configPath,
 		jobName,
 		Env{},
-		false,
 		runner,
 	); e != nil {
 		p.reportError(e)
@@ -269,8 +276,8 @@ func (p *Manager) runCommand(
 	defaultRunner CommandRunner,
 ) (ret error) {
 	runner := defaultRunner
-	if command.RunAt != "" {
-		if runner, ret = p.getRunner(jobConfig, command.RunAt); ret != nil {
+	if command.On != "" {
+		if runner, ret = p.getRunner(jobConfig, command.On); ret != nil {
 			return
 		}
 	}
@@ -289,25 +296,24 @@ func (p *Manager) runCommand(
 		}
 		if ret = p.runJob(
 			cmdConfig,
-			env.parseString(command.Value),
+			env.parseString(command.Exec),
 			env.parseEnv(command.Env),
-			false,
 			runner,
 		); ret != nil {
 			return
 		}
 	} else if cmdType == "cmd" {
-		if command.Value != "" {
+		if command.Exec != "" {
 			// print the command
 			p.logCH <- newLogRecordCommand(
 				runner.Name(),
 				jobName,
-				"Command: "+env.parseString(command.Value)+"\n",
+				"Command: "+env.parseString(command.Exec)+"\n",
 			)
 
 			if ret = runner.RunCommand(
 				jobName,
-				env.parseString(command.Value),
+				env.parseString(command.Exec),
 				env.parseStringArray(command.Inputs),
 				p.logCH,
 			); ret != nil {
@@ -325,17 +331,11 @@ func (p *Manager) runJob(
 	jobConfig string,
 	jobName string,
 	runningEnv Env,
-	isHandlerError bool,
 	defaultRunner CommandRunner,
 ) error {
 	// report job message
 	startMsg := "Job Start!\n"
 	endMsg := "Job End!\n"
-
-	if isHandlerError {
-		startMsg = "ErrorHandler Start!\n"
-		endMsg = "ErrorHandler End!\n"
-	}
 
 	p.logCH <- newLogRecordJob(defaultRunner.Name(), jobName, startMsg)
 	defer func() {
@@ -351,12 +351,10 @@ func (p *Manager) runJob(
 	if e != nil {
 		return e
 	}
+
 	concurrency := job.Concurrency
 	commands := job.Commands
-	if isHandlerError {
-		commands = job.ErrorHandler
-		concurrency = false
-	}
+
 	env := rootEnv.merge(config.Env).merge(job.Env).merge(runningEnv)
 
 	if !concurrency {
@@ -369,15 +367,6 @@ func (p *Manager) runJob(
 				command,
 				defaultRunner,
 			); e != nil {
-				if !isHandlerError && len(job.ErrorHandler) > 0 {
-					_ = p.runJob(
-						jobConfig,
-						jobName,
-						env,
-						true,
-						defaultRunner,
-					)
-				}
 				return e
 			}
 		}
@@ -405,9 +394,6 @@ func (p *Manager) runJob(
 		}
 
 		if len(errCH) != 0 {
-			if !isHandlerError && len(job.ErrorHandler) > 0 {
-				_ = p.runJob(jobConfig, jobName, env, true, defaultRunner)
-			}
 			return <-errCH
 		}
 	}

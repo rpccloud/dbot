@@ -12,19 +12,16 @@
     "install": {
       "concurrency": true,
       "commands": [
-        {"value": "echo \"Start Running\"", "runAt": "local"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev82"},
-        {"type": "job", "value": "nodeInstall", "runAt": "dev83"}
-      ],
-      "errorHandler": [
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"}
+        {"exec": "echo \"using json\"", "on": "local"},
+        {"type": "job", "exec": "nodeInstall", "on": "dev81"},
+        {"type": "job", "exec": "nodeInstall", "on": "dev82"},
+        {"type": "job", "exec": "nodeInstall", "on": "dev83"}
       ]
     },
     "nodeInstall": {
       "commands": [
-        {"value": "apt-get update"},
-        {"value": "vim test.sh", "inputs": [
+        {"exec": "apt-get update"},
+        {"exec": "vim test.sh", "inputs": [
           "i", 
           "test\n",
           "test\n",
@@ -35,13 +32,13 @@
     },
     "nodeUninstall": {
       "commands": [
-        {"type": "cmd", "value": "rm /opt/demo/test.log"}
+        {"type": "cmd", "exec": "rm test.sh"}
       ]
     },
     "uninstall": {
       "concurrency": true,
       "commands": [
-        {"type": "job", "value": "nodeUninstall", "runAt": "dev81"}
+        {"type": "job", "exec": "nodeUninstall", "on": "dev81"}
       ]
     }
   }
