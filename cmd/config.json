@@ -12,6 +12,7 @@
     "install": {
       "concurrency": true,
       "commands": [
+        {"value": "echo \"Start Running\"", "runAt": "local"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev81"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev82"},
         {"type": "job", "value": "nodeInstall", "runAt": "dev83"}

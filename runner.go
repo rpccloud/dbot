@@ -87,10 +87,12 @@ type CommandRunner interface {
 	) error
 }
 
-type LocalRunner struct{}
+type LocalRunner struct {
+	name string
+}
 
 func (p *LocalRunner) Name() string {
-	return os.Getenv("USER") + "@local"
+	return p.name
 }
 
 func (p *LocalRunner) RunCommand(
@@ -118,7 +120,7 @@ func (p *LocalRunner) RunCommand(
 			_ = stdout.Close()
 			retCH <- e
 			if str != "" {
-				logCH <- newLogRecordInfo("local", jobName, "Out: "+str)
+				logCH <- newLogRecordInfo(p.Name(), jobName, "Out: "+str)
 			}
 		}()
 
@@ -127,7 +129,7 @@ func (p *LocalRunner) RunCommand(
 			_ = stderr.Close()
 			retCH <- e
 			if str != "" {
-				logCH <- newLogRecordError("local", jobName, "Error: "+str)
+				logCH <- newLogRecordError(p.Name(), jobName, "Error: "+str)
 			}
 		}()
 
@@ -224,7 +226,7 @@ func (p *SSHRunner) RunCommand(
 				retCH <- e
 				if str != "" {
 					logCH <- newLogRecordInfo(
-						p.user+"@"+p.host, jobName, "Out: "+str,
+						p.Name(), jobName, "Out: "+str,
 					)
 				}
 			}()
@@ -234,7 +236,7 @@ func (p *SSHRunner) RunCommand(
 				retCH <- e
 				if str != "" {
 					logCH <- newLogRecordError(
-						p.user+"@"+p.host, jobName, "Error: "+str,
+						p.Name(), jobName, "Error: "+str,
 					)
 				}
 			}()
