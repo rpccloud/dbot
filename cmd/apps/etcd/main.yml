@@ -1,0 +1,9 @@
+---
+name: dbot apps
+jobs:
+  install:
+    commands:
+    - exec: echo "install etcd"
+    - type: job
+      config: "./sub.yml"
+      exec: install

@@ -1,0 +1,8 @@
+---
+name: dbot apps
+jobs:
+  install:
+    commands:
+    - exec: echo "install etcd sub"
+    - exec: echo ${ConfigDir}
+

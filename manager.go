@@ -283,7 +283,9 @@ func (p *Manager) runJob(
 	concurrency := job.Concurrency
 	commands := job.Commands
 
-	env := rootEnv.merge(config.Env).merge(job.Env).merge(runningEnv)
+	env := rootEnv.merge(Env{
+		"ConfigDir": filepath.Dir(jobConfig),
+	}).merge(config.Env).merge(job.Env).merge(runningEnv)
 
 	if !concurrency {
 		for i := 0; i < len(commands); i++ {
