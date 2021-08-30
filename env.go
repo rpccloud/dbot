@@ -1,6 +1,7 @@
 package dbot
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -68,4 +69,61 @@ func (p Env) merge(env Env) Env {
 	}
 
 	return ret
+}
+
+func (p Env) initialize(head string, body string) (Env, error) {
+	hasShowNotice := false
+	ret := Env{}
+
+	for key, it := range p {
+		if it.Type == "password" {
+			if !hasShowNotice {
+				LogNotice(head, body)
+				hasShowNotice = true
+			}
+
+			desc := it.Desc
+			if desc == "" {
+				desc = "password " + key + ": "
+			}
+			password, e := GetPasswordFromUser(desc)
+			if e != nil {
+				return Env{}, e
+			}
+			ret[key] = EnvItem{
+				Type:  it.Type,
+				Desc:  it.Desc,
+				Value: password,
+			}
+		} else if it.Type == "input" {
+			if !hasShowNotice {
+				LogNotice(head, body)
+				hasShowNotice = true
+			}
+
+			input := ""
+			desc := it.Desc
+			if desc == "" {
+				desc = "input " + key + ": "
+			}
+			LogInput(desc)
+			_, e := fmt.Scanf("%s", &input)
+			if e != nil {
+				return Env{}, e
+			}
+			ret[key] = EnvItem{
+				Type:  it.Type,
+				Desc:  it.Desc,
+				Value: input,
+			}
+		} else {
+			ret[key] = EnvItem{
+				Type:  it.Type,
+				Desc:  it.Desc,
+				Value: it.Value,
+			}
+		}
+	}
+
+	return ret, nil
 }

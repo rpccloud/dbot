@@ -171,7 +171,7 @@ func NewSSHRunner(
 	_ = client.Close()
 
 	if ret.password == "" {
-		LogAuth(fmt.Sprintf("Use PublicKey on %s@%s\n", ret.user, ret.host))
+		LogInput(fmt.Sprintf("Use PublicKey on %s@%s\n", ret.user, ret.host))
 	}
 
 	return ret, nil

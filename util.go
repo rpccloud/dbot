@@ -35,7 +35,7 @@ func log(a ...interface{}) {
 	}
 }
 
-func LogAuth(auth string) {
+func LogInput(auth string) {
 	log(auth, color.FgMagenta)
 }
 
@@ -74,7 +74,7 @@ func ReadStringFromIOReader(reader io.Reader) (string, error) {
 }
 
 func GetPasswordFromUser(head string) (string, error) {
-	LogAuth(head)
+	LogInput(head)
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 	if err != nil {

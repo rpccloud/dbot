@@ -119,6 +119,13 @@ func (p *Manager) prepareJob(
 		}
 
 		config = &jsonConfig
+
+		// init config env
+		env, e := config.Env.initialize("init config env: ", configPath)
+		if e != nil {
+			return e
+		}
+		config.Env = env
 		p.configMap[configPath] = config
 	}
 
@@ -169,7 +176,24 @@ func (p *Manager) prepareJob(
 					return e
 				}
 			}
+
+			// init command env
+			env, e := cmd.Env.initialize(
+				"init cmd env: ",
+				configPath+" > "+jobName+" > "+cmd.Exec,
+			)
+			if e != nil {
+				return e
+			}
+			cmd.Env = env
 		}
+
+		// init job env
+		env, e := job.Env.initialize("init job env: ", configPath+" > "+jobName)
+		if e != nil {
+			return e
+		}
+		job.Env = env
 	}
 
 	return nil

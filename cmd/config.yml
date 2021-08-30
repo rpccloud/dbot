@@ -3,10 +3,10 @@ name: dbot apps
 env:
   CustomValue1:
     type: input
-    head: 'please input: '
+    desc: 'please input: '
   CustomValue2:
     type: password
-    head: 'password : '
+    desc: 'password : '
   CustomValue3:
     type: text
     value: 'OK'
@@ -15,10 +15,9 @@ jobs:
     env:
       CustomValue1:
         type: input
-        head: 'please input: '
+        desc: 'please input CustomValue1: '
       CustomValue2:
         type: password
-        head: 'password : '
       CustomValue3:
         value: 'Error'
     commands:
