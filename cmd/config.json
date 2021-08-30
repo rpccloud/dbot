@@ -6,7 +6,9 @@
     "dev83": { "port": 22,  "user": "root", "host": "192.168.1.83"}
   },
   "env": {
-    "CustomValue": "ok"
+    "CustomValue1": {"type": "input", "head": "please input: "},
+    "CustomValue2": {"type": "password", "head": "password : "},
+    "CustomValue3": {"type": "text", "value": ""}
   },
   "jobs": {
     "install": {

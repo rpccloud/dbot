@@ -1,11 +1,34 @@
 ---
 name: dbot apps
+env:
+  CustomValue1:
+    type: input
+    head: 'please input: '
+  CustomValue2:
+    type: password
+    head: 'password : '
+  CustomValue3:
+    type: text
+    value: 'OK'
 jobs:
   installEtcd:
+    env:
+      CustomValue1:
+        type: input
+        head: 'please input: '
+      CustomValue2:
+        type: password
+        head: 'password : '
+      CustomValue3:
+        value: 'Error'
     commands:
-    - exec: echo ${ConfigDir}
-    - type: job
-      config: ./apps/etcd/main.yml
-      exec: install
-      on: local
+      - exec: tr [a-z] [A-Z]
+        inputs: 
+          - ${CustomValue3}
+      - exec: echo ${CustomValue3}
+      - exec: echo ${ConfigDir}
+      - type: job
+        config: ./apps/etcd/main.yml
+        exec: install
+        on: local
 

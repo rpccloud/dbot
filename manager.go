@@ -11,8 +11,12 @@ import (
 )
 
 var rootEnv = Env{
-	"KeyESC":   "\033",
-	"KeyEnter": "\n",
+	"KeyESC": EnvItem{
+		Value: "\033",
+	},
+	"KeyEnter": EnvItem{
+		Value: "\n",
+	},
 }
 
 var outFilter = []string{
@@ -284,7 +288,9 @@ func (p *Manager) runJob(
 	commands := job.Commands
 
 	env := rootEnv.merge(Env{
-		"ConfigDir": filepath.Dir(jobConfig),
+		"ConfigDir": EnvItem{
+			Value: filepath.Dir(jobConfig),
+		},
 	}).merge(config.Env).merge(job.Env).merge(runningEnv)
 
 	if !concurrency {

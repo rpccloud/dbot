@@ -4,12 +4,17 @@ import (
 	"strings"
 )
 
-type Env map[string]string
+type EnvItem struct {
+	Type  string
+	Desc  string
+	Value string
+}
+type Env map[string]EnvItem
 
 func (p Env) parseString(str string) string {
 	replaceArray := make([]string, 0)
-	for key, value := range p {
-		replaceArray = append(replaceArray, "${"+key+"}", value)
+	for key, it := range p {
+		replaceArray = append(replaceArray, "${"+key+"}", it.Value)
 	}
 
 	replacer := strings.NewReplacer(replaceArray...)
@@ -29,8 +34,12 @@ func (p Env) parseStringArray(arr []string) []string {
 func (p Env) parseEnv(env Env) Env {
 	ret := make(Env)
 
-	for key, value := range env {
-		ret[key] = p.parseString(value)
+	for key, it := range env {
+		ret[key] = EnvItem{
+			Type:  it.Type,
+			Desc:  it.Desc,
+			Value: p.parseString(it.Value),
+		}
 	}
 
 	return ret
@@ -42,8 +51,20 @@ func (p Env) merge(env Env) Env {
 		ret[key] = value
 	}
 
-	for key, value := range env {
-		ret[key] = p.parseString(value)
+	for key, it := range env {
+		if it.Type != "password" {
+			ret[key] = EnvItem{
+				Type:  it.Type,
+				Desc:  it.Desc,
+				Value: p.parseString(it.Value),
+			}
+		} else {
+			ret[key] = EnvItem{
+				Type:  it.Type,
+				Desc:  it.Desc,
+				Value: it.Value,
+			}
+		}
 	}
 
 	return ret

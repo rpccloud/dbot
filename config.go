@@ -25,5 +25,5 @@ type Config struct {
 	Name    string
 	Remotes map[string]Remote
 	Jobs    map[string]Job
-	Env     map[string]string
+	Env     Env
 }
