@@ -101,3 +101,55 @@ func GetAbsConfigPathFrom(
 		filepath.Join(filepath.Dir(currentAbsConfig), relativePath),
 	)
 }
+
+func ParseCommand(str string) []string {
+	command := " " + str + " "
+	ret := make([]string, 0)
+	isSingleQuote := false
+	isDoubleQuotes := false
+	preChar := uint8(0)
+	cmdStart := -1
+
+	for i := 0; i < len(command); i++ {
+		if isSingleQuote {
+			if command[i] == 0x27 {
+				isSingleQuote = false
+			}
+			preChar = command[i]
+			continue
+		}
+
+		if isDoubleQuotes {
+			if command[i] == 0x22 && preChar != 0x5C {
+				isDoubleQuotes = false
+			}
+			preChar = command[i]
+			continue
+		}
+
+		if command[i] == ' ' {
+			if cmdStart >= 0 {
+				ret = append(ret, command[cmdStart:i])
+				cmdStart = -1
+			}
+			preChar = command[i]
+			continue
+		}
+
+		if cmdStart < 0 {
+			cmdStart = i
+		}
+
+		if command[i] == 0x27 {
+			isSingleQuote = true
+		}
+
+		if command[i] == 0x22 {
+			isDoubleQuotes = true
+		}
+
+		preChar = command[i]
+	}
+
+	return ret
+}

@@ -106,7 +106,7 @@ func (p *LocalRunner) RunCommand(
 	defer p.Unlock()
 
 	head := p.Name() + " > " + jobName + ": "
-	cmdArray := strings.Fields(command)
+	cmdArray := ParseCommand(command)
 
 	var cmd *exec.Cmd
 	if len(cmdArray) == 1 {
