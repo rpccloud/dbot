@@ -107,7 +107,16 @@ func (p *LocalRunner) RunCommand(
 
 	head := p.Name() + " > " + jobName + ": "
 	cmdArray := strings.Fields(command)
-	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
+
+	var cmd *exec.Cmd
+	if len(cmdArray) == 1 {
+		cmd = exec.Command(cmdArray[0])
+	} else if len(cmdArray) > 1 {
+		cmd = exec.Command(cmdArray[0], cmdArray[1:]...)
+	} else {
+		LogCommandErr(head, command, "the command is empty")
+		return false
+	}
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

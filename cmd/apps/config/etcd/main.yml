@@ -1,0 +1,29 @@
+---
+name: dbot apps
+jobs:
+  initEtcdNodeCA:
+    commands:
+      - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
+      - type: job
+        config: ../ca/main.yml
+        exec: createCA
+        env: 
+          OutputDir: 
+            value: ${ConfigDir}/../../data/etcd/ca/nodes
+            desc: create ca for etcd nodes
+  initEtcdClientCA:
+    commands:
+      - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
+      - type: job
+        config: ../ca/main.yml
+        exec: createCA
+        env: 
+          OutputDir: 
+            value: ${ConfigDir}/../../data/etcd/ca/client
+            desc: create ca for etcd clients
+  install:
+    commands:
+    - exec: echo "install etcd"
+    - type: job
+      config: "./sub.yml"
+      exec: install
