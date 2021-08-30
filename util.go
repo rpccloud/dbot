@@ -39,28 +39,26 @@ func LogAuth(auth string) {
 	log(auth, color.FgMagenta)
 }
 
-func LogError(head string, e error) {
-	log(head, color.FgRed, getStandradOut(e.Error()), color.FgRed)
+func LogError(head string, body string) {
+	log(head, color.FgYellow, getStandradOut(body), color.FgRed)
 }
 
 func LogNotice(head string, body string) {
-	log(head, color.FgGreen, body, color.FgYellow)
+	log(head, color.FgYellow, getStandradOut(body), color.FgGreen)
 }
 
 func LogCommandOut(head string, commnad string, out string) {
 	log(
-		head, color.FgGreen,
-		commnad, color.FgYellow,
-		" => \n", color.FgGreen,
+		head, color.FgYellow,
+		getStandradOut(commnad), color.FgGreen,
 		getStandradOut(out), color.FgBlue,
 	)
 }
 
 func LogCommandErr(head string, commnad string, out string) {
 	log(
-		head, color.FgRed,
-		commnad, color.FgRed,
-		" => \n", color.FgRed,
+		head, color.FgYellow,
+		getStandradOut(commnad), color.FgGreen,
 		getStandradOut(out), color.FgRed,
 	)
 }

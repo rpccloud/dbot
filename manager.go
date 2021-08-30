@@ -61,7 +61,7 @@ func (p *Manager) getJob(configPath string, jobName string) (*Job, error) {
 }
 
 func (p *Manager) getJobFullPath(configPath string, jobName string) string {
-	return configPath + " => jobs => " + jobName
+	return configPath + " > " + jobName
 }
 
 func (p *Manager) getRunner(
@@ -173,13 +173,13 @@ func (p *Manager) prepareJob(
 
 func (p *Manager) Run(configPath string, jobName string) bool {
 	if absConfigPath, e := filepath.Abs(configPath); e != nil {
-		LogError(os.Getenv("User")+"@dbot => loading config", e)
+		LogError(os.Getenv("User")+"@dbot > loading config: ", e.Error())
 		return false
 	} else if e := p.prepareJob(jobName, absConfigPath, []string{}); e != nil {
-		LogError(os.Getenv("User")+"@dbot => loading config", e)
+		LogError(os.Getenv("User")+"@dbot > loading config: ", e.Error())
 		return false
 	} else if runner, e := p.getRunner(absConfigPath, "local"); e != nil {
-		LogError(os.Getenv("User")+"@dbot => get local runner", e)
+		LogError(os.Getenv("User")+"@dbot > get local runner: ", e.Error())
 		return false
 	} else {
 		return p.runJob(absConfigPath, jobName, Env{}, runner)
@@ -193,13 +193,13 @@ func (p *Manager) runCommand(
 	cmd Command,
 	defaultRunner CommandRunner,
 ) bool {
-	head := defaultRunner.Name() + " => " + jobName + ": "
+	head := defaultRunner.Name() + " > " + jobName + ": "
 
 	runner := defaultRunner
 	if cmd.On != "" {
 		v, e := p.getRunner(jobConfig, cmd.On)
 		if e != nil {
-			LogError(head, e)
+			LogError(head, e.Error())
 			return false
 		}
 		runner = v
@@ -218,7 +218,7 @@ func (p *Manager) runCommand(
 			var e error
 			cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
 			if e != nil {
-				LogError(head, fmt.Errorf(
+				LogError(head, fmt.Sprintf(
 					"\"%s\" is invalid in config file \"%s\" error: %s",
 					cmd.Config,
 					jobConfig,
@@ -241,7 +241,7 @@ func (p *Manager) runCommand(
 			env.parseStringArray(cmd.Inputs),
 		)
 	} else {
-		LogError(head, fmt.Errorf("unknown command type %s", cmdType))
+		LogError(head, fmt.Sprintf("unknown command type %s", cmdType))
 		return false
 	}
 }
@@ -251,20 +251,32 @@ func (p *Manager) runJob(
 	jobName string,
 	runningEnv Env,
 	defaultRunner CommandRunner,
-) bool {
-	head := defaultRunner.Name() + " => " + jobName + ": "
-	LogNotice(head, "Start Job: "+jobConfig+" => "+jobName+"\n")
-	defer LogNotice(head, "End Job: "+jobConfig+" => "+jobName+"\n")
+) (ret bool) {
+	head := defaultRunner.Name() + " > " + jobName + ": "
+	LogNotice(head, fmt.Sprintf("Job \"%s > %s\" Start", jobConfig, jobName))
+	defer func() {
+		if ret {
+			LogNotice(
+				head,
+				fmt.Sprintf("Job \"%s > %s\" successful", jobConfig, jobName),
+			)
+		} else {
+			LogError(
+				head,
+				fmt.Sprintf("Job \"%s > %s\" failed", jobConfig, jobName),
+			)
+		}
+	}()
 
 	config, e := p.getConfig(jobConfig)
 	if e != nil {
-		LogError(head, e)
+		LogError(head, e.Error())
 		return false
 	}
 
 	job, e := p.getJob(jobConfig, jobName)
 	if e != nil {
-		LogError(head, e)
+		LogError(head, e.Error())
 		return false
 	}
 

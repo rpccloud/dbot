@@ -1,6 +1,7 @@
 package dbot
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -104,50 +105,33 @@ func (p *LocalRunner) RunCommand(
 	p.Lock()
 	defer p.Unlock()
 
-	head := p.Name() + " => " + jobName + ": "
+	head := p.Name() + " > " + jobName + ": "
 	cmdArray := strings.Fields(command)
 	cmd := exec.Command(cmdArray[0], cmdArray[1:]...)
-	stdout, e := cmd.StdoutPipe()
-	if e != nil {
-		LogError(head, e)
-		return false
-	}
-	stderr, e := cmd.StderrPipe()
-	if e != nil {
-		_ = stdout.Close()
-		LogError(head, e)
-		return false
-	}
 
-	waitCH := make(chan bool, 2)
-
-	go func() {
-		str, _ := ReadStringFromIOReader(stdout)
-		_ = stdout.Close()
-		if str != "" && !FilterString(str, outFilter) {
-			LogCommandOut(head, command, str)
-		}
-		waitCH <- true
-	}()
-
-	go func() {
-		str, _ := ReadStringFromIOReader(stderr)
-		_ = stderr.Close()
-		if str != "" && !FilterString(str, errFilter) {
-			LogCommandErr(head, command, str)
-		}
-		waitCH <- true
-	}()
-
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
 	cmd.Stdin = NewRunnerInput(inputs, nil)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	e := cmd.Run()
+	hasOutPut := false
 
-	e = cmd.Run()
+	errStr := getStandradOut(stderr.String())
 	if e != nil {
-		LogCommandErr(head, command, e.Error())
+		errStr += getStandradOut(e.Error())
 	}
 
-	<-waitCH
-	<-waitCH
+	if errStr != "" && !FilterString(errStr, errFilter) {
+		LogCommandErr(head, command, errStr)
+		hasOutPut = true
+	}
+
+	if s := stdout.String(); !hasOutPut || s != "" {
+		if !FilterString(s, outFilter) {
+			LogCommandOut(head, command, s)
+		}
+	}
 
 	return e == nil
 }
@@ -205,14 +189,14 @@ func (p *SSHRunner) RunCommand(
 	p.Lock()
 	defer p.Unlock()
 
-	head := p.Name() + " => " + jobName + ": "
+	head := p.Name() + " > " + jobName + ": "
 
 	if client, e := p.getClient(SSHAuthIdle); e != nil {
-		LogError(head, e)
+		LogError(head, e.Error())
 		return false
 	} else if session, e := client.NewSession(); e != nil {
 		_ = client.Close()
-		LogError(head, e)
+		LogError(head, e.Error())
 		return false
 	} else {
 		defer func() {
@@ -220,44 +204,29 @@ func (p *SSHRunner) RunCommand(
 			_ = client.Close()
 		}()
 
-		stdout, e := session.StdoutPipe()
-		if e != nil {
-			LogError(head, e)
-			return false
-		}
-		stderr, e := session.StderrPipe()
-		if e != nil {
-			LogError(head, e)
-			return false
-		}
-
-		waitCH := make(chan bool, 2)
-
-		go func() {
-			str, _ := ReadStringFromIOReader(stdout)
-			if str != "" && !FilterString(str, outFilter) {
-				LogCommandOut(head, command, str)
-			}
-			waitCH <- true
-		}()
-
-		go func() {
-			str, _ := ReadStringFromIOReader(stderr)
-			if str != "" && !FilterString(str, errFilter) {
-				LogCommandErr(head, command, str)
-			}
-			waitCH <- true
-		}()
-
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
 		session.Stdin = NewRunnerInput(inputs, nil)
-
+		session.Stdout = stdout
+		session.Stderr = stderr
 		e = session.Run(command)
+		hasOutPut := false
+
+		errStr := getStandradOut(stderr.String())
 		if e != nil {
-			LogError(head, e)
+			errStr += getStandradOut(e.Error())
 		}
 
-		<-waitCH
-		<-waitCH
+		if errStr != "" && !FilterString(errStr, errFilter) {
+			LogCommandErr(head, command, errStr)
+			hasOutPut = true
+		}
+
+		if s := stdout.String(); !hasOutPut || s != "" {
+			if !FilterString(s, outFilter) {
+				LogCommandOut(head, command, s)
+			}
+		}
 
 		return e == nil
 	}
