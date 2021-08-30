@@ -44,21 +44,21 @@ func LogError(head string, body string) {
 }
 
 func LogNotice(head string, body string) {
-	log(head, color.FgYellow, getStandradOut(body), color.FgGreen)
+	log(head, color.FgYellow, getStandradOut(body), color.FgBlue)
 }
 
 func LogCommandOut(head string, commnad string, out string) {
 	log(
 		head, color.FgYellow,
-		getStandradOut(commnad), color.FgGreen,
-		getStandradOut(out), color.FgBlue,
+		getStandradOut(commnad), color.FgBlue,
+		getStandradOut(out), color.FgGreen,
 	)
 }
 
 func LogCommandErr(head string, commnad string, out string) {
 	log(
 		head, color.FgYellow,
-		getStandradOut(commnad), color.FgGreen,
+		getStandradOut(commnad), color.FgBlue,
 		getStandradOut(out), color.FgRed,
 	)
 }
