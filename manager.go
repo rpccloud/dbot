@@ -133,7 +133,24 @@ func (p *Manager) prepareJob(
 
 	// prepare job
 	if job, ok := config.Jobs[jobName]; ok {
+		// init job env
+		env, e := job.Env.initialize("init job env: ", jobConfig+" > "+jobName)
+		if e != nil {
+			return e
+		}
+		job.Env = env
+
 		for _, cmd := range job.Commands {
+			// init command env
+			env, e := cmd.Env.initialize(
+				"init cmd env: ",
+				jobConfig+" > "+jobName+" > "+cmd.Exec,
+			)
+			if e != nil {
+				return e
+			}
+			cmd.Env = env
+
 			jobEnv := rootEnv.merge(Env{
 				"ConfigDir": EnvItem{
 					Value: filepath.Dir(jobConfig),
@@ -188,24 +205,7 @@ func (p *Manager) prepareJob(
 					return e
 				}
 			}
-
-			// init command env
-			env, e := cmd.Env.initialize(
-				"init cmd env: ",
-				jobConfig+" > "+jobName+" > "+cmd.Exec,
-			)
-			if e != nil {
-				return e
-			}
-			cmd.Env = env
 		}
-
-		// init job env
-		env, e := job.Env.initialize("init job env: ", jobConfig+" > "+jobName)
-		if e != nil {
-			return e
-		}
-		job.Env = env
 	}
 
 	return nil
