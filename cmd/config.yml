@@ -4,19 +4,8 @@ jobs:
   install:
     commands:
       - type: job
-        config: ./apps/etcd/main.yml
+        config: ../examples/etcd/main.yml
         exec: initEtcdNodeCA
       - type: job
-        config: ./apps/etcd/main.yml
+        config: ../examples/etcd/main.yml
         exec: initEtcdClientCA
-  installEtcd:
-    commands:
-      - exec: tr [a-z] [A-Z]
-        inputs: 
-          - ${CustomValue3}
-      - exec: echo ${CustomValue3}
-      - exec: echo ${ConfigDir}
-      - type: job
-        config: ./apps/etcd/main.yml
-        exec: install
-        on: local
