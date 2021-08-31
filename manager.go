@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -88,21 +89,22 @@ func (p *Manager) getRunner(
 
 func (p *Manager) prepareJob(
 	jobName string,
-	configPath string,
+	jobConfig string,
 	parentDebug []string,
+	runningEnv Env,
 ) error {
-	currentDebug := append(parentDebug, p.getJobFullPath(configPath, jobName))
+	currentDebug := append(parentDebug, p.getJobFullPath(jobConfig, jobName))
 
 	// load config
-	config, ok := p.configMap[configPath]
+	config, ok := p.configMap[jobConfig]
 	if !ok {
 		jsonConfig := Config{}
-		configBytes, e := ioutil.ReadFile(configPath)
+		configBytes, e := ioutil.ReadFile(jobConfig)
 		if e != nil {
 			return e
 		}
 
-		ext := filepath.Ext(configPath)
+		ext := filepath.Ext(jobConfig)
 		if ext == ".json" {
 			if e := json.Unmarshal(configBytes, &jsonConfig); e != nil {
 				return e
@@ -114,64 +116,73 @@ func (p *Manager) prepareJob(
 		} else {
 			return fmt.Errorf(
 				"illegal config file extension \"%s\"",
-				configPath,
+				jobConfig,
 			)
 		}
 
 		config = &jsonConfig
 
 		// init config env
-		env, e := config.Env.initialize("init config env: ", configPath)
+		env, e := config.Env.initialize("init config env: ", jobConfig)
 		if e != nil {
 			return e
 		}
 		config.Env = env
-		p.configMap[configPath] = config
+		p.configMap[jobConfig] = config
 	}
 
 	// prepare job
 	if job, ok := config.Jobs[jobName]; ok {
 		for _, cmd := range job.Commands {
-			if cmd.On != "" && cmd.On != "local" {
-				if remote, ok := config.Remotes[cmd.On]; ok {
-					userHost := remote.User + "@" + remote.Host
-					if _, ok := p.runnerMap[userHost]; !ok {
-						ssh, e := NewSSHRunner(
-							userHost,
-							remote.Port,
-							remote.User,
-							remote.Host,
-						)
-						if e != nil {
-							return e
+			jobEnv := rootEnv.merge(Env{
+				"ConfigDir": EnvItem{
+					Value: filepath.Dir(jobConfig),
+				},
+			}).merge(config.Env).merge(job.Env).merge(runningEnv)
+			cmdOn := jobEnv.merge(cmd.Env).parseString(cmd.On)
+			for _, rawName := range strings.Split(cmdOn, ",") {
+				runnerName := strings.TrimSpace(rawName)
+				if runnerName != "" && runnerName != "local" {
+					if remote, ok := config.Remotes[runnerName]; ok {
+						userHost := remote.User + "@" + remote.Host
+						if _, ok := p.runnerMap[userHost]; !ok {
+							ssh, e := NewSSHRunner(
+								userHost,
+								remote.Port,
+								remote.User,
+								remote.Host,
+							)
+							if e != nil {
+								return e
+							}
+							p.runnerMap[userHost] = ssh
 						}
-						p.runnerMap[userHost] = ssh
+					} else {
+						return fmt.Errorf(
+							"remote \"%s\" is not found in config \"%s\"",
+							runnerName,
+							jobConfig,
+						)
 					}
-				} else {
-					return fmt.Errorf(
-						"remote \"%s\" is not found in config \"%s\"",
-						cmd.On,
-						configPath,
-					)
 				}
 			}
 
 			if cmd.Type == "job" {
-				cmdConfig := configPath
+				cmdConfig := jobConfig
 				if cmd.Config != "" {
 					var e error
-					cmdConfig, e = GetAbsConfigPathFrom(configPath, cmd.Config)
+					cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
 					if e != nil {
 						return fmt.Errorf(
 							"\"%s\" is invalid in config file \"%s\" error: %s",
 							cmd.Config,
-							configPath,
+							jobConfig,
 							e.Error(),
 						)
 					}
 				}
 				if e := p.prepareJob(
-					cmd.Exec, cmdConfig, currentDebug,
+					cmd.Exec, cmdConfig, currentDebug, jobEnv.parseEnv(cmd.Env),
 				); e != nil {
 					return e
 				}
@@ -180,7 +191,7 @@ func (p *Manager) prepareJob(
 			// init command env
 			env, e := cmd.Env.initialize(
 				"init cmd env: ",
-				configPath+" > "+jobName+" > "+cmd.Exec,
+				jobConfig+" > "+jobName+" > "+cmd.Exec,
 			)
 			if e != nil {
 				return e
@@ -189,7 +200,7 @@ func (p *Manager) prepareJob(
 		}
 
 		// init job env
-		env, e := job.Env.initialize("init job env: ", configPath+" > "+jobName)
+		env, e := job.Env.initialize("init job env: ", jobConfig+" > "+jobName)
 		if e != nil {
 			return e
 		}
@@ -203,7 +214,9 @@ func (p *Manager) Run(configPath string, jobName string) bool {
 	if absConfigPath, e := filepath.Abs(configPath); e != nil {
 		LogError(os.Getenv("User")+"@dbot > loading config: ", e.Error())
 		return false
-	} else if e := p.prepareJob(jobName, absConfigPath, []string{}); e != nil {
+	} else if e := p.prepareJob(
+		jobName, absConfigPath, []string{}, Env{},
+	); e != nil {
 		LogError(os.Getenv("User")+"@dbot > loading config: ", e.Error())
 		return false
 	} else if runner, e := p.getRunner(absConfigPath, "local"); e != nil {
@@ -223,14 +236,28 @@ func (p *Manager) runCommand(
 ) bool {
 	head := defaultRunner.Name() + " > " + jobName + ": "
 
-	runner := defaultRunner
-	if cmd.On != "" {
-		v, e := p.getRunner(jobConfig, cmd.On)
-		if e != nil {
-			LogError(head, e.Error())
+	runners := []CommandRunner{}
+	if cmd.On == "" {
+		runners = append(runners, defaultRunner)
+	} else {
+		for _, rawName := range strings.Split(cmd.On, ",") {
+			if runnerName := strings.TrimSpace(rawName); runnerName != "" {
+				v, e := p.getRunner(jobConfig, runnerName)
+				if e != nil {
+					LogError(head, e.Error())
+					return false
+				}
+				runners = append(runners, v)
+			}
+		}
+
+		if len(runners) == 0 {
+			LogError(head, fmt.Sprintf(
+				"could not find runner \"%s\" in config file \"%s\"",
+				cmd.On, jobConfig,
+			))
 			return false
 		}
-		runner = v
 	}
 
 	cmdType := cmd.Type
@@ -256,18 +283,30 @@ func (p *Manager) runCommand(
 			}
 		}
 
-		return p.runJob(
-			cmdConfig,
-			env.parseString(cmd.Exec),
-			jobEnv.parseEnv(cmd.Env),
-			runner,
-		)
+		for _, runner := range runners {
+			if !p.runJob(
+				cmdConfig,
+				env.parseString(cmd.Exec),
+				jobEnv.parseEnv(cmd.Env),
+				runner,
+			) {
+				return false
+			}
+		}
+
+		return true
 	} else if cmdType == "cmd" {
-		return runner.RunCommand(
-			jobName,
-			env.parseString(cmd.Exec),
-			env.parseStringArray(cmd.Inputs),
-		)
+		for _, runner := range runners {
+			if !runner.RunCommand(
+				jobName,
+				env.parseString(cmd.Exec),
+				env.parseStringArray(cmd.Inputs),
+			) {
+				return false
+			}
+		}
+
+		return true
 	} else {
 		LogError(head, fmt.Sprintf("unknown command type %s", cmdType))
 		return false

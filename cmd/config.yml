@@ -1,5 +1,9 @@
 ---
 name: dbot apps
+remotes: 
+  dev81: 
+    host: 192.168.1.81
+    user: root
 jobs:
   install:
     commands:
@@ -9,3 +13,7 @@ jobs:
       - type: job
         config: ../examples/etcd/main.yml
         exec: initEtcdClientCA
+  test:
+    commands:
+      - exec: echo "hello"
+        on: dev81,local
