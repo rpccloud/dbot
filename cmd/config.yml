@@ -1,13 +1,13 @@
 ---
 name: dbot apps
 jobs:
-  initEtcdCA:
+  install:
     commands:
       - type: job
-        config: ./etcd/main.yml
+        config: ./apps/etcd/main.yml
         exec: initEtcdNodeCA
       - type: job
-        config: ./etcd/main.yml
+        config: ./apps/etcd/main.yml
         exec: initEtcdClientCA
   installEtcd:
     commands:
@@ -20,4 +20,3 @@ jobs:
         config: ./apps/etcd/main.yml
         exec: install
         on: local
-

@@ -14,19 +14,19 @@ jobs:
         value: CN
         desc: Country Name (2 letter code)
       SSL_ST:
-        value: Zhejiang
+        value: Beijing
         desc: State or Province Name (full name)
       SSL_L:
-        value: Hangzhou
+        value: Beijing
         desc: Locality Name (eg, city)
       SSL_O:
-        value: rpc cloud co. Ltd.
+        value: rpccloud.com
         desc: Organization Name (eg, company)
       SSL_OU:
         value: IT
         desc: Organizational Unit Name (eg, section)
       SSL_CN:
-        value: com.rpccloud.dev
+        value: com.rpccloud.dbot.config.openssl
         desc: Common Name (eg, fully qualified host name)
     commands:
       - exec: mkdir ${OutputDir}
