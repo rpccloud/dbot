@@ -141,8 +141,6 @@ func (p *Manager) prepareJob(
 			}).merge(config.Env).merge(job.Env).merge(runningEnv)
 
 			cmdOn := jobEnv.merge(cmd.Env).parseString(cmd.On)
-
-			fmt.Println(config.Env)
 			for _, rawName := range strings.Split(cmdOn, ",") {
 				runnerName := strings.TrimSpace(rawName)
 				if runnerName != "" && runnerName != "local" {
