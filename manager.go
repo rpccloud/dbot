@@ -139,7 +139,10 @@ func (p *Manager) prepareJob(
 					Value: filepath.Dir(jobConfig),
 				},
 			}).merge(config.Env).merge(job.Env).merge(runningEnv)
+
 			cmdOn := jobEnv.merge(cmd.Env).parseString(cmd.On)
+
+			fmt.Println(config.Env)
 			for _, rawName := range strings.Split(cmdOn, ",") {
 				runnerName := strings.TrimSpace(rawName)
 				if runnerName != "" && runnerName != "local" {
@@ -236,11 +239,19 @@ func (p *Manager) runCommand(
 ) bool {
 	head := defaultRunner.Name() + " > " + jobName + ": "
 
+	cmdType := cmd.Type
+	if cmdType == "" {
+		cmdType = "cmd"
+	}
+
+	env := jobEnv.merge(cmd.Env)
+
 	runners := []CommandRunner{}
 	if cmd.On == "" {
 		runners = append(runners, defaultRunner)
 	} else {
-		for _, rawName := range strings.Split(cmd.On, ",") {
+		cmdOn := env.parseString(cmd.On)
+		for _, rawName := range strings.Split(cmdOn, ",") {
 			if runnerName := strings.TrimSpace(rawName); runnerName != "" {
 				v, e := p.getRunner(jobConfig, runnerName)
 				if e != nil {
@@ -254,18 +265,11 @@ func (p *Manager) runCommand(
 		if len(runners) == 0 {
 			LogError(head, fmt.Sprintf(
 				"could not find runner \"%s\" in config file \"%s\"",
-				cmd.On, jobConfig,
+				cmdOn, jobConfig,
 			))
 			return false
 		}
 	}
-
-	cmdType := cmd.Type
-	if cmdType == "" {
-		cmdType = "cmd"
-	}
-
-	env := jobEnv.merge(cmd.Env)
 
 	if cmdType == "job" {
 		cmdConfig := jobConfig

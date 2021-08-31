@@ -1,6 +1,12 @@
 ---
 name: dbot apps
+env: 
+  SayHelloGroup: 
+    value: dev81,local,dev63
 remotes: 
+  dev63: 
+    host: 192.168.1.63
+    user: tianshuo
   dev81: 
     host: 192.168.1.81
     user: root
@@ -16,4 +22,5 @@ jobs:
   test:
     commands:
       - exec: echo "hello"
-        on: dev81,local
+        on: ${SayHelloGroup}
+
