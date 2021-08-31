@@ -47,19 +47,21 @@ func LogNotice(head string, body string) {
 	log(head, color.FgYellow, getStandradOut(body), color.FgBlue)
 }
 
-func LogCommandOut(head string, commnad string, out string) {
+func LogCommand(head string, commnad string, out string, err string) {
 	log(
 		head, color.FgYellow,
 		getStandradOut(commnad), color.FgBlue,
 		getStandradOut(out), color.FgGreen,
+		getStandradOut(err), color.FgRed,
 	)
 }
 
-func LogCommandErr(head string, commnad string, out string) {
+func LogScript(head string, script string, out string, err string) {
 	log(
-		head, color.FgYellow,
-		getStandradOut(commnad), color.FgBlue,
-		getStandradOut(out), color.FgRed,
+		head+"\n", color.FgYellow,
+		getStandradOut(script), color.FgBlue,
+		getStandradOut(out), color.FgGreen,
+		getStandradOut(err), color.FgRed,
 	)
 }
 

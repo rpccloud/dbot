@@ -21,6 +21,12 @@ jobs:
         exec: initEtcdClientCA
   test:
     commands:
+      - type: js
+        on: dev81
+        exec: |
+          (function(name) {
+            dbotLog("hello " + name)
+            dbotError("hello " + name)
+          }) ("world")
       - exec: echo "hello"
-        on: ${SayHelloGroup}
-
+      - exec: echox "hello"

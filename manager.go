@@ -1,6 +1,7 @@
 package dbot
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/robertkrimen/otto"
 	"gopkg.in/yaml.v2"
 )
 
@@ -309,10 +311,62 @@ func (p *Manager) runCommand(
 		}
 
 		return true
+	} else if cmdType == "js" {
+		for _, runner := range runners {
+			if !p.runScript(
+				jobConfig,
+				jobName,
+				env.parseString(cmd.Exec),
+				env,
+				runner,
+			) {
+				return false
+			}
+		}
+
+		return true
 	} else {
 		LogError(head, fmt.Sprintf("unknown command type %s", cmdType))
 		return false
 	}
+}
+
+func (p *Manager) runScript(
+	jobConfig string,
+	jobName string,
+	script string,
+	env Env,
+	defaultRunner CommandRunner,
+) bool {
+	head := defaultRunner.Name() + " > " + jobName + ": "
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	vm := otto.New()
+	_ = vm.Set("dbotLog", func(call otto.FunctionCall) otto.Value {
+		for _, v := range call.ArgumentList {
+			stdout.WriteString(v.String())
+		}
+		stdout.WriteString("\n")
+		return otto.Value{}
+	})
+	_ = vm.Set("dbotError", func(call otto.FunctionCall) otto.Value {
+		for _, v := range call.ArgumentList {
+			stderr.WriteString(v.String())
+		}
+		stderr.WriteString("\n")
+		return otto.Value{}
+	})
+
+	_, e := vm.Run(script)
+	errStr := getStandradOut(stderr.String())
+	if e != nil {
+		errStr += getStandradOut(e.Error())
+	}
+
+	LogScript(head, script, stdout.String(), errStr)
+
+	return e == nil
 }
 
 func (p *Manager) runJob(

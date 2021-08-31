@@ -114,7 +114,7 @@ func (p *LocalRunner) RunCommand(
 	} else if len(cmdArray) > 1 {
 		cmd = exec.Command(cmdArray[0], cmdArray[1:]...)
 	} else {
-		LogCommandErr(head, command, "the command is empty")
+		LogCommand(head, command, "", "the command is empty")
 		return false
 	}
 
@@ -124,24 +124,22 @@ func (p *LocalRunner) RunCommand(
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	e := cmd.Run()
-	hasOutPut := false
 
-	errStr := getStandradOut(stderr.String())
+	outString := ""
+	errString := ""
+	if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
+		outString += s
+	}
+
+	if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
+		errString += s
+	}
+
 	if e != nil {
-		errStr += getStandradOut(e.Error())
+		errString += getStandradOut(e.Error())
 	}
 
-	if errStr != "" && !FilterString(errStr, errFilter) {
-		LogCommandErr(head, command, errStr)
-		hasOutPut = true
-	}
-
-	if s := stdout.String(); !hasOutPut || s != "" {
-		if !FilterString(s, outFilter) {
-			LogCommandOut(head, command, s)
-		}
-	}
-
+	LogCommand(head, command, outString, errString)
 	return e == nil
 }
 
@@ -219,24 +217,21 @@ func (p *SSHRunner) RunCommand(
 		session.Stdout = stdout
 		session.Stderr = stderr
 		e = session.Run(command)
-		hasOutPut := false
+		outString := ""
+		errString := ""
+		if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
+			outString += s
+		}
 
-		errStr := getStandradOut(stderr.String())
+		if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
+			errString += s
+		}
+
 		if e != nil {
-			errStr += getStandradOut(e.Error())
+			errString += getStandradOut(e.Error())
 		}
 
-		if errStr != "" && !FilterString(errStr, errFilter) {
-			LogCommandErr(head, command, errStr)
-			hasOutPut = true
-		}
-
-		if s := stdout.String(); !hasOutPut || s != "" {
-			if !FilterString(s, outFilter) {
-				LogCommandOut(head, command, s)
-			}
-		}
-
+		LogCommand(head, command, outString, errString)
 		return e == nil
 	}
 }
