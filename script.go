@@ -1,103 +1,96 @@
 package dbot
 
-import (
-	"fmt"
-	"strconv"
+// func parseCommandFromObject(object *otto.Object) (Command, error) {
+// 	ret := Command{}
+// 	keys := object.Keys()
+// 	for _, key := range keys {
+// 		value, e := object.Get(key)
+// 		if e != nil {
+// 			return ret, fmt.Errorf(
+// 				"get object.%s error: %s", key, e.Error(),
+// 			)
+// 		}
 
-	"github.com/robertkrimen/otto"
-)
+// 		switch key {
+// 		case "type":
+// 			if !value.IsString() {
+// 				return ret, fmt.Errorf("object.%s must be string", key)
+// 			}
+// 			ret.Type = value.String()
+// 		case "exec":
+// 			if !value.IsString() {
+// 				return ret, fmt.Errorf("object.%s must be string", key)
+// 			}
+// 			ret.Exec = value.String()
+// 		case "on":
+// 			if !value.IsString() {
+// 				return ret, fmt.Errorf("object.%s must be string", key)
+// 			}
+// 			ret.On = value.String()
+// 		case "env":
+// 			env := Env{}
+// 			if !value.IsObject() {
+// 				return ret, fmt.Errorf("object.%s must be object", key)
+// 			}
+// 			for _, key := range value.Object().Keys() {
+// 				if value.Object() == nil {
+// 					return ret, fmt.Errorf("object.env.%s is nil", key)
+// 				}
+// 				item, e := value.Object().Get(key)
+// 				if e != nil {
+// 					return ret, fmt.Errorf(
+// 						"object.env.%s error: %s", key, e.Error(),
+// 					)
+// 				}
+// 				if !item.IsString() {
+// 					return ret, fmt.Errorf("object.env.%s must be string", key)
+// 				}
+// 				env[key] = item.String()
+// 			}
+// 			ret.Env = env
+// 		case "inputs":
+// 			inputs := []string{}
+// 			if !value.IsObject() {
+// 				return ret, fmt.Errorf("object.%s must be object", key)
+// 			}
+// 			startIndex := int64(0)
+// 			for _, key := range value.Object().Keys() {
+// 				if strconv.FormatInt(startIndex, 10) != key {
+// 					return ret, fmt.Errorf("object.inputs must be array")
+// 				}
 
-func parseCommandFromObject(object *otto.Object) (Command, error) {
-	ret := Command{}
-	keys := object.Keys()
-	for _, key := range keys {
-		value, e := object.Get(key)
-		if e != nil {
-			return ret, fmt.Errorf(
-				"get object.%s error: %s", key, e.Error(),
-			)
-		}
+// 				if value.Object() == nil {
+// 					return ret, fmt.Errorf("object.inputs[%s] is nil", key)
+// 				}
 
-		switch key {
-		case "type":
-			if !value.IsString() {
-				return ret, fmt.Errorf("object.%s must be string", key)
-			}
-			ret.Type = value.String()
-		case "exec":
-			if !value.IsString() {
-				return ret, fmt.Errorf("object.%s must be string", key)
-			}
-			ret.Exec = value.String()
-		case "on":
-			if !value.IsString() {
-				return ret, fmt.Errorf("object.%s must be string", key)
-			}
-			ret.On = value.String()
-		case "env":
-			env := Env{}
-			if !value.IsObject() {
-				return ret, fmt.Errorf("object.%s must be object", key)
-			}
-			for _, key := range value.Object().Keys() {
-				if value.Object() == nil {
-					return ret, fmt.Errorf("object.env.%s is nil", key)
-				}
-				item, e := value.Object().Get(key)
-				if e != nil {
-					return ret, fmt.Errorf(
-						"object.env.%s error: %s", key, e.Error(),
-					)
-				}
-				if !item.IsString() {
-					return ret, fmt.Errorf("object.env.%s must be string", key)
-				}
-				env[key] = item.String()
-			}
-			ret.Env = env
-		case "inputs":
-			inputs := []string{}
-			if !value.IsObject() {
-				return ret, fmt.Errorf("object.%s must be object", key)
-			}
-			startIndex := int64(0)
-			for _, key := range value.Object().Keys() {
-				if strconv.FormatInt(startIndex, 10) != key {
-					return ret, fmt.Errorf("object.inputs must be array")
-				}
+// 				item, e := value.Object().Get(key)
+// 				if e != nil {
+// 					return ret, fmt.Errorf(
+// 						"object.inputs[%s] error: %s", key, e.Error(),
+// 					)
+// 				}
+// 				if !item.IsString() {
+// 					return ret, fmt.Errorf(
+// 						"object.inputs[%s] must be string", key,
+// 					)
+// 				}
 
-				if value.Object() == nil {
-					return ret, fmt.Errorf("object.inputs[%s] is nil", key)
-				}
+// 				inputs = append(inputs, item.String())
+// 				startIndex++
+// 			}
+// 			ret.Inputs = inputs
+// 		case "config":
+// 			if !value.IsString() {
+// 				return ret, fmt.Errorf("object.%s must be string", key)
+// 			}
+// 			ret.Config = value.String()
+// 		default:
+// 			return ret, fmt.Errorf("object.%s is not supported", key)
+// 		}
+// 	}
 
-				item, e := value.Object().Get(key)
-				if e != nil {
-					return ret, fmt.Errorf(
-						"object.inputs[%s] error: %s", key, e.Error(),
-					)
-				}
-				if !item.IsString() {
-					return ret, fmt.Errorf(
-						"object.inputs[%s] must be string", key,
-					)
-				}
-
-				inputs = append(inputs, item.String())
-				startIndex++
-			}
-			ret.Inputs = inputs
-		case "config":
-			if !value.IsString() {
-				return ret, fmt.Errorf("object.%s must be string", key)
-			}
-			ret.Config = value.String()
-		default:
-			return ret, fmt.Errorf("object.%s is not supported", key)
-		}
-	}
-
-	return ret, nil
-}
+// 	return ret, nil
+// }
 
 // type DbotObject struct {
 // 	stdout        *bytes.Buffer

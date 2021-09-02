@@ -23,7 +23,7 @@ tasks:
       config:  ../examples/etcd/main.yml
       name: initEtcdNodeCA
 run: 
-  - installEtcd
+  - installEtcds
     
 # jobs:
 #   install:

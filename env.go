@@ -6,7 +6,7 @@ import (
 
 type Env map[string]string
 
-func (p Env) parseString(v string, defaultStr string, trimSpace bool) string {
+func (p Env) ParseString(v string, defaultStr string, trimSpace bool) string {
 	replaceArray := make([]string, 0)
 	for key, value := range p {
 		replaceArray = append(replaceArray, "${"+key+"}", value)
@@ -26,27 +26,27 @@ func (p Env) parseString(v string, defaultStr string, trimSpace bool) string {
 	return ret
 }
 
-func (p Env) parseStringArray(arr []string) []string {
+func (p Env) ParseStringArray(arr []string) []string {
 	ret := make([]string, len(arr))
 
 	for i := 0; i < len(arr); i++ {
-		ret[i] = p.parseString(arr[i], "", false)
+		ret[i] = p.ParseString(arr[i], "", false)
 	}
 
 	return ret
 }
 
-func (p Env) parseEnv(env Env) Env {
+func (p Env) ParseEnv(env Env) Env {
 	ret := make(Env)
 
 	for key, value := range env {
-		ret[key] = p.parseString(value, "", false)
+		ret[key] = p.ParseString(value, "", false)
 	}
 
 	return ret
 }
 
-func (p Env) merge(env Env) Env {
+func (p Env) Merge(env Env) Env {
 	ret := make(Env)
 	for key, value := range p {
 		ret[key] = value

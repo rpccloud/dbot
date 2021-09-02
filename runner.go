@@ -1,7 +1,5 @@
 package dbot
 
-
-
 // type SSHAuth int
 
 // const (

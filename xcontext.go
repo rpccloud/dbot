@@ -66,13 +66,6 @@ func NewRootContext(absConfig string) *XContext {
 }
 
 func (p *XContext) CreateTaskContext(name string) *XContext {
-	if p.cmd.Type != "main" {
-		p.LogError(
-			"kernel error: CreateTaskContext must be called on RootContext",
-		)
-		return nil
-	}
-
 	return &XContext{
 		parent:  p,
 		task:    nil,
@@ -90,13 +83,6 @@ func (p *XContext) CreateTaskContext(name string) *XContext {
 }
 
 func (p *XContext) CreateImportContext(name string, config string) *XContext {
-	if p.cmd.Type != "task" {
-		p.LogError(
-			"kernel error: CreateImportContext must be called on TaskContext",
-		)
-		return nil
-	}
-
 	return &XContext{
 		parent:  p,
 		task:    p.task,
@@ -128,7 +114,7 @@ func (p *XContext) Clone() *XContext {
 		current: p.current,
 		cmd:     p.cmd.Clone(),
 		runner:  p.runner,
-		env:     p.env.merge(nil),
+		env:     p.env.Merge(nil),
 	}
 }
 
@@ -196,7 +182,7 @@ func (p *XContext) LoadRemoteConfig(absPath string) map[string][]*Remote {
 }
 
 func (p *XContext) RootEnv() Env {
-	return rootEnv.merge(rootEnv.merge(Env{
+	return rootEnv.Merge(rootEnv.Merge(Env{
 		"ConfigDir": filepath.Dir(p.cmd.Config),
 	}))
 }

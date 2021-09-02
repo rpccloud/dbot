@@ -107,7 +107,39 @@ func (p *MainRunner) Run(ctx *XContext) bool {
 	return true
 }
 
-func (p *MainRunner) prepareRemoteList(
+func (p *MainRunner) Prepare(ctx *XContext) bool {
+	config := MainConfig{}
+
+	if ok := ctx.loadConfig(ctx.cmd.Config, &config); !ok {
+		return false
+	}
+
+	for _, taskName := range config.Run {
+		taskCtx := ctx.CreateTaskContext(taskName)
+
+		if taskCtx == nil {
+			return false
+		}
+
+		if !taskCtx.Prepare() {
+			return false
+		}
+
+		p.taskContexts = append(p.taskContexts, taskCtx)
+	}
+
+	return true
+}
+
+type TaskRunner struct {
+	sync.Mutex
+}
+
+func (p *TaskRunner) Name() string {
+	return fmt.Sprintf("%s@local", os.Getenv("USER"))
+}
+
+func (p *TaskRunner) prepareRemoteList(
 	ctx *XContext,
 	key string,
 	list []*Remote,
@@ -142,7 +174,13 @@ func (p *MainRunner) prepareRemoteList(
 	return true
 }
 
-func (p *MainRunner) prepareTask(ctx *XContext, config *MainConfig) bool {
+func (p *TaskRunner) Prepare(ctx *XContext) bool {
+	config := MainConfig{}
+
+	if ok := ctx.loadConfig(ctx.cmd.Config, &config); !ok {
+		return false
+	}
+
 	taskName := ctx.cmd.Exec
 	task, ok := config.Tasks[taskName]
 	if !ok {
@@ -152,29 +190,29 @@ func (p *MainRunner) prepareTask(ctx *XContext, config *MainConfig) bool {
 
 	ctx.SetTask(task)
 	// prepare env
-	taskEnv := ctx.RootEnv().merge(task.Env)
-	mergeEnv := ctx.RootEnv().merge(task.Env)
+	taskEnv := ctx.RootEnv().Merge(task.Env)
+	mergeEnv := ctx.RootEnv().Merge(task.Env)
 	for key, it := range task.Inputs {
 		ctx.Clone().
 			SetCurrentf("%s.inputs.%s", ctx.current, key).
 			LogInfo("")
-		itDesc := taskEnv.parseString(it.Desc, "input "+key+": ", false)
-		itType := taskEnv.parseString(it.Type, "text", true)
+		itDesc := taskEnv.ParseString(it.Desc, "input "+key+": ", false)
+		itType := taskEnv.ParseString(it.Type, "text", true)
 		value, ok := ctx.GetUserInput(itDesc, itType)
 		if !ok {
 			return false
 		}
-		mergeEnv[key] = taskEnv.parseString(value, "", false)
+		mergeEnv[key] = taskEnv.ParseString(value, "", false)
 	}
 	ctx.SetEnv(mergeEnv)
 
 	// prepare imports
 	task.groupMap = make(map[string][]string)
 	for key, it := range task.Imports {
-		importName := mergeEnv.parseString(it.Name, "", true)
+		importName := mergeEnv.ParseString(it.Name, "", true)
 		improtConfigPath, ok := ctx.Clone().
 			SetCurrentf("%s.imports.%s", ctx.current, key).
-			AbsPath(mergeEnv.parseString(it.Config, "", true))
+			AbsPath(mergeEnv.ParseString(it.Config, "", true))
 		if !ok {
 			return false
 		}
@@ -215,45 +253,11 @@ func (p *MainRunner) prepareTask(ctx *XContext, config *MainConfig) bool {
 		}
 	}
 
-	p.taskContexts = append(p.taskContexts, ctx)
-	return true
-}
-
-func (p *MainRunner) Prepare(ctx *XContext) bool {
-	config := MainConfig{}
-
-	if ctx.cmd.Type != "main" {
-		ctx.LogErrorf(
-			"kernel error: command type \"%s\" can not run on MainRunner",
-			ctx.cmd.Type,
-		)
-		return false
-	} else if ok := ctx.loadConfig(ctx.cmd.Config, &config); !ok {
-		return false
-	} else {
-		for _, taskName := range config.Run {
-			if !p.prepareTask(ctx.CreateTaskContext(taskName), &config) {
-				return false
-			}
-		}
-
-		return true
-	}
-}
-
-type TaskRunner struct {
-	sync.Mutex
-}
-
-func (p *TaskRunner) Name() string {
-	return fmt.Sprintf("%s@local", os.Getenv("USER"))
-}
-
-func (p *TaskRunner) Prepare(ctx *XContext) bool {
 	return true
 }
 
 func (p *TaskRunner) Run(ctx *XContext) bool {
+	fmt.Println("Run Task ", ctx.cmd)
 	return false
 }
 
@@ -320,7 +324,6 @@ func (p *LocalRunner) RunCommand(
 }
 
 type SSHRunner struct {
-	name     string
 	port     uint16
 	user     string
 	host     string

@@ -48,18 +48,12 @@ type Command struct {
 }
 
 func (p *Command) Clone() *Command {
-	inputs := []string(nil)
-
-	for _, input := range p.Inputs {
-		inputs = append(inputs, input)
-	}
-
 	return &Command{
 		Type:   p.Type,
 		Exec:   p.Exec,
 		On:     p.On,
-		Inputs: inputs,
-		Env:    p.Env.merge(nil),
+		Inputs: append([]string{}, p.Inputs...),
+		Env:    p.Env.Merge(nil),
 		Config: p.Config,
 	}
 }
