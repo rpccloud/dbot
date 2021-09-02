@@ -45,6 +45,11 @@ func getStandradOut(s string) string {
 	}
 }
 
+func IsAbsPath(path string) bool {
+	absPath, e := filepath.Abs(path)
+	return e == nil && absPath == path
+}
+
 func LogInput(auth string) {
 	log(auth, color.FgMagenta)
 }

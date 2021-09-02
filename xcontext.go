@@ -85,7 +85,7 @@ func (p *XContext) CreateTaskContext(name string) *XContext {
 			Env:    nil,
 			Config: p.cmd.Config,
 		},
-		runner: p.runner,
+		runner: &TaskRunner{},
 	}
 }
 
@@ -132,7 +132,11 @@ func (p *XContext) Clone() *XContext {
 	}
 }
 
-func (p *XContext) AbsFilePath(path string) (string, bool) {
+func (p *XContext) AbsPath(path string) (string, bool) {
+	if IsAbsPath(path) {
+		return path, true
+	}
+
 	ret, e := filepath.Abs(filepath.Join(
 		filepath.Dir(p.cmd.Config),
 		path,
