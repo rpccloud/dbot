@@ -1,0 +1,57 @@
+---
+name: dbot entry
+tasks:
+  installEtcd:
+    env: 
+      EtcdName: "name"
+    remotes: 
+      EtcdClient:
+        - host: 192.168.1.82
+          user: root
+    imports:
+      EtcdServers: 
+        config: ./remotes.yml
+        name: EtcdServers
+    inputs: 
+      EtcdName: 
+        type: text
+        desc: "Input etcd cluster name: "
+      EtcdPassword:
+        type: password
+        desc: "Input etcd password: "
+    job:
+      config:  ../examples/etcd/main.yml
+      name: initEtcdNodeCA
+run: 
+  - installEtcd
+    
+# jobs:
+#   install:
+#     commands:
+#       - type: job
+#         config: ../examples/etcd/main.yml
+#         exec: initEtcdNodeCA
+#       - type: job
+#         config: ../examples/etcd/main.yml
+#         exec: initEtcdClientCA
+#   test:
+#     commands:
+#       - type: js
+#         on: dev81
+#         exec: |
+#           (function(name) {
+#             dbot.Log("hello log " + name)
+#             dbot.Error("hello error " + name)
+#             dbot.Command({
+#               exec: 'echo "hello uu"',
+#               inputs: [
+#                 "hello",
+#                 "world",
+#               ],
+#               env: {
+#                 TestEnv: "you",
+#               },
+#             })
+#           }) ("world")
+#       - exec: echo "hello"
+#       - exec: echo "hello"

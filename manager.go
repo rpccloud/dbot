@@ -1,448 +1,486 @@
 package dbot
 
-import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strings"
+// type Manager struct {
+// 	runnerMap map[string]CommandRunner
+// 	configMap map[string]*JobConfig
+// }
 
-	"github.com/robertkrimen/otto"
-	"gopkg.in/yaml.v2"
-)
+// func NewManager() *Manager {
+// 	ret := &Manager{
+// 		runnerMap: make(map[string]CommandRunner),
+// 		configMap: make(map[string]*JobConfig),
+// 	}
 
-var rootEnv = Env{
-	"KeyESC": EnvItem{
-		Value: "\033",
-	},
-	"KeyEnter": EnvItem{
-		Value: "\n",
-	},
-}
+// 	ret.runnerMap["local"] = &LocalRunner{}
 
-var outFilter = []string{
-	"\033",
-}
+// 	return ret
+// }
 
-var errFilter = []string{
-	"Output is not to a terminal",
-	"Input is not from a terminal",
-}
+// func (p *Manager) getConfig(configPath string) (*JobConfig, error) {
+// 	if config, ok := p.configMap[configPath]; !ok {
+// 		return nil, fmt.Errorf("could not find config \"%s\"", configPath)
+// 	} else {
+// 		return config, nil
+// 	}
+// }
 
-type Manager struct {
-	runnerMap map[string]CommandRunner
-	configMap map[string]*Config
-}
+// func (p *Manager) getJob(configPath string, jobName string) (*Job, error) {
+// 	if config, e := p.getConfig(configPath); e != nil {
+// 		return nil, e
+// 	} else if job, ok := config.Jobs[jobName]; !ok {
+// 		return nil, fmt.Errorf(
+// 			"could not find job \"%s\"", p.getJobFullPath(configPath, jobName),
+// 		)
+// 	} else {
+// 		return job, nil
+// 	}
+// }
 
-func NewManager() *Manager {
-	ret := &Manager{
-		runnerMap: make(map[string]CommandRunner),
-		configMap: make(map[string]*Config),
-	}
+// func (p *Manager) getJobFullPath(configPath string, jobName string) string {
+// 	return configPath + " > " + jobName
+// }
 
-	ret.runnerMap["local"] = &LocalRunner{name: os.Getenv("USER") + "@local"}
+// func (p *Manager) Run(absEntryPath string) bool {
+// 	ctx := NewContext(p, nil, &DbotRunner{}, absEntryPath, "", "", nil, nil)
+// 	entryConfig := MainConfig{}
 
-	return ret
-}
+// 	if e := loadConfig(absEntryPath, &entryConfig); e != nil {
+// 		ctx.LogError(e.Error())
+// 		return false
+// 	} else {
+// 		// start prepare
+// 		fnPrepare := func(taskName string) bool {
+// 			task, ok := entryConfig.Tasks[taskName]
+// 			if !ok {
+// 				ctx.SetPathf("tasks.%s", taskName)
+// 				ctx.LogError("task not found")
+// 				return false
+// 			}
 
-func (p *Manager) getConfig(configPath string) (*Config, error) {
-	if config, ok := p.configMap[configPath]; !ok {
-		return nil, fmt.Errorf("could not find config \"%s\"", configPath)
-	} else {
-		return config, nil
-	}
-}
+// 			// prepare env
+// 			env := Env{}.merge(task.Env)
+// 			for key, it := range task.Inputs {
+// 				ctx.SetPathf("tasks.%s.inputs.%s", taskName, key)
+// 				ctx.LogInfo("")
 
-func (p *Manager) getJob(configPath string, jobName string) (*Job, error) {
-	if config, e := p.getConfig(configPath); e != nil {
-		return nil, e
-	} else if job, ok := config.Jobs[jobName]; !ok {
-		return nil, fmt.Errorf(
-			"could not find job \"%s\"", p.getJobFullPath(configPath, jobName),
-		)
-	} else {
-		return &job, nil
-	}
-}
+// 				desc := it.Desc
+// 				if desc == "" {
+// 					desc = "input " + key + ": "
+// 				}
 
-func (p *Manager) getJobFullPath(configPath string, jobName string) string {
-	return configPath + " > " + jobName
-}
+// 				value, e := ctx.GetUserInput(desc, it.Type)
+// 				if e != nil {
+// 					ctx.LogRawError(e.Error() + "\n")
+// 					return false
+// 				}
 
-func (p *Manager) getRunner(
-	configPath string,
-	runAt string,
-) (CommandRunner, error) {
-	if config, e := p.getConfig(configPath); e != nil {
-		return nil, e
-	} else if runAt == "local" {
-		return p.runnerMap["local"], nil
-	} else if remote, ok := config.Remotes[runAt]; !ok {
-		return nil, fmt.Errorf(
-			"could not find runner \"%s\" in config file \"%s\"",
-			runAt, configPath,
-		)
-	} else {
-		return p.runnerMap[fmt.Sprintf("%s@%s", remote.User, remote.Host)], nil
-	}
-}
+// 				env[key] = value
+// 			}
+// 			task.Env = env
 
-func (p *Manager) prepareJob(
-	jobName string,
-	jobConfig string,
-	parentDebug []string,
-	runningEnv Env,
-) error {
-	currentDebug := append(parentDebug, p.getJobFullPath(jobConfig, jobName))
+// 			task.groupMap = make(map[string][]string)
 
-	// load config
-	config, ok := p.configMap[jobConfig]
-	if !ok {
-		jsonConfig := Config{}
-		configBytes, e := ioutil.ReadFile(jobConfig)
-		if e != nil {
-			return e
-		}
+// 			fnPrepareRemoteList := func(
+// 				ctx *Context,
+// 				path string,
+// 				key string,
+// 				list []*Remote,
+// 			) bool {
+// 				group := make([]string, 0)
+// 				for idx, it := range list {
+// 					port := it.Port
+// 					if port == 0 {
+// 						port = 22
+// 					}
 
-		ext := filepath.Ext(jobConfig)
-		if ext == ".json" {
-			if e := json.Unmarshal(configBytes, &jsonConfig); e != nil {
-				return e
-			}
-		} else if ext == ".yml" || ext == ".yaml" {
-			if e := yaml.Unmarshal(configBytes, &jsonConfig); e != nil {
-				return e
-			}
-		} else {
-			return fmt.Errorf(
-				"illegal config file extension \"%s\"",
-				jobConfig,
-			)
-		}
+// 					id := fmt.Sprintf("%s@%s:%d", it.User, it.Host, port)
+// 					if _, ok := p.runnerMap[id]; !ok {
 
-		config = &jsonConfig
+// 						ssh, e := NewSSHRunner(
+// 							port,
+// 							it.User,
+// 							it.Host,
+// 						)
+// 						if e != nil {
+// 							ctx.SetPathf(
+// 								"%s%s[%d]",
+// 								path, key, idx,
+// 							)
+// 							ctx.LogError(e.Error())
+// 							return false
+// 						}
+// 						p.runnerMap[id] = ssh
+// 					}
+// 					group = append(group, id)
+// 				}
 
-		// init config env
-		env, e := config.Env.initialize("init config env: ", jobConfig)
-		if e != nil {
-			return e
-		}
-		config.Env = env
-		p.configMap[jobConfig] = config
-	}
+// 				task.groupMap[key] = group
+// 				return true
+// 			}
 
-	// prepare job
-	if job, ok := config.Jobs[jobName]; ok {
-		// init job env
-		env, e := job.Env.initialize("init job env: ", jobConfig+" > "+jobName)
-		if e != nil {
-			return e
-		}
-		job.Env = env
+// 			// prepare imports
+// 			for key, it := range task.Imports {
+// 				importConfig := make(map[string][]*Remote)
 
-		for _, cmd := range job.Commands {
-			// init command env
-			env, e := cmd.Env.initialize(
-				"init cmd env: ",
-				jobConfig+" > "+jobName+" > "+cmd.Exec,
-			)
-			if e != nil {
-				return e
-			}
-			cmd.Env = env
+// 				if absPath, e := filepath.Abs(
+// 					filepath.Join(path.Dir(absEntryPath), it.Config),
+// 				); e != nil {
+// 					ctx.SetPathf("tasks.%s.imports.%s.config", taskName, key)
+// 					ctx.LogError(e.Error())
+// 					return false
+// 				} else if e := loadConfig(absPath, &importConfig); e != nil {
+// 					ctx.SetPathf("tasks.%s.imports.%s.config", taskName, key)
+// 					ctx.LogError(e.Error())
+// 					return false
+// 				} else if list, ok := importConfig[it.Name]; !ok {
+// 					ctx.SetPathf("tasks.%s.imports.%s.name", taskName, key)
+// 					ctx.LogErrorf(
+// 						"could not find \"%s\" in \"%s\"",
+// 						it.Name, absPath,
+// 					)
+// 					return false
+// 				} else {
+// 					subCtx := ctx.Clone().SetConfig(absPath)
+// 					if !fnPrepareRemoteList(subCtx, "", key, list) {
+// 						return false
+// 					}
+// 				}
+// 			}
 
-			jobEnv := rootEnv.merge(Env{
-				"ConfigDir": EnvItem{
-					Value: filepath.Dir(jobConfig),
-				},
-			}).merge(config.Env).merge(job.Env).merge(runningEnv)
+// 			// prepare remotes
+// 			for key, list := range task.Remotes {
+// 				path := fmt.Sprintf("asks.%s.remotes.", key)
+// 				if !fnPrepareRemoteList(ctx, path, key, list) {
+// 					return false
+// 				}
+// 			}
 
-			cmdOn := jobEnv.merge(cmd.Env).parseString(cmd.On)
-			for _, rawName := range strings.Split(cmdOn, ",") {
-				runnerName := strings.TrimSpace(rawName)
-				if runnerName != "" && runnerName != "local" {
-					if remote, ok := config.Remotes[runnerName]; ok {
-						userHost := remote.User + "@" + remote.Host
-						if _, ok := p.runnerMap[userHost]; !ok {
-							ssh, e := NewSSHRunner(
-								userHost,
-								remote.Port,
-								remote.User,
-								remote.Host,
-							)
-							if e != nil {
-								return e
-							}
-							p.runnerMap[userHost] = ssh
-						}
-					} else {
-						return fmt.Errorf(
-							"remote \"%s\" is not found in config \"%s\"",
-							runnerName,
-							jobConfig,
-						)
-					}
-				}
-			}
+// 			fmt.Println(task.groupMap)
+// 			return true
+// 		}
 
-			if cmd.Type == "job" {
-				cmdConfig := jobConfig
-				if cmd.Config != "" {
-					var e error
-					cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
-					if e != nil {
-						return fmt.Errorf(
-							"\"%s\" is invalid in config file \"%s\" error: %s",
-							cmd.Config,
-							jobConfig,
-							e.Error(),
-						)
-					}
-				}
-				if e := p.prepareJob(
-					cmd.Exec, cmdConfig, currentDebug, jobEnv.parseEnv(cmd.Env),
-				); e != nil {
-					return e
-				}
-			}
-		}
-	}
+// 		// prepare all run jobs
+// 		for _, taskName := range entryConfig.Run {
+// 			if !fnPrepare(taskName) {
+// 				return false
+// 			}
+// 		}
 
-	return nil
-}
+// 		return true
+// 	}
+// }
 
-func (p *Manager) Run(configPath string, jobName string) bool {
-	if absConfigPath, e := filepath.Abs(configPath); e != nil {
-		LogError(os.Getenv("User")+"@dbot > loading config: ", e.Error())
-		return false
-	} else if e := p.prepareJob(
-		jobName, absConfigPath, []string{}, Env{},
-	); e != nil {
-		LogError(os.Getenv("User")+"@dbot > loading config: ", e.Error())
-		return false
-	} else if runner, e := p.getRunner(absConfigPath, "local"); e != nil {
-		LogError(os.Getenv("User")+"@dbot > get local runner: ", e.Error())
-		return false
-	} else {
-		return p.runJob(absConfigPath, jobName, Env{}, runner)
-	}
-}
+// func (p *Manager) runCommand(jobCtx *Context, index int, cmd *Command) bool {
+// 	ctx := jobCtx.Clone().SetEnv(jobCtx.env.merge(cmd.Env))
 
-func (p *Manager) runCommand(
-	jobConfig string,
-	jobName string,
-	jobEnv Env,
-	cmd Command,
-	defaultRunner CommandRunner,
-) bool {
-	head := defaultRunner.Name() + " > " + jobName + ": "
+// 	cmdType := cmd.Type
+// 	if cmdType == "" {
+// 		cmdType = "cmd"
+// 	}
 
-	cmdType := cmd.Type
-	if cmdType == "" {
-		cmdType = "cmd"
-	}
+// 	env := jobCtx.env.merge(cmd.Env)
 
-	env := jobEnv.merge(cmd.Env)
+// 	runners := []CommandRunner{}
+// 	if cmd.On == "" {
+// 		runners = append(runners, defaultRunner)
+// 	} else {
+// 		cmdOn := env.parseString(cmd.On)
+// 		for _, rawName := range strings.Split(cmdOn, ",") {
+// 			if runnerName := strings.TrimSpace(rawName); runnerName != "" {
+// 				v, e := p.getRunner(jobConfig, runnerName)
+// 				if e != nil {
+// 					LogError(head, e.Error())
+// 					return false
+// 				}
+// 				runners = append(runners, v)
+// 			}
+// 		}
 
-	runners := []CommandRunner{}
-	if cmd.On == "" {
-		runners = append(runners, defaultRunner)
-	} else {
-		cmdOn := env.parseString(cmd.On)
-		for _, rawName := range strings.Split(cmdOn, ",") {
-			if runnerName := strings.TrimSpace(rawName); runnerName != "" {
-				v, e := p.getRunner(jobConfig, runnerName)
-				if e != nil {
-					LogError(head, e.Error())
-					return false
-				}
-				runners = append(runners, v)
-			}
-		}
+// 		if len(runners) == 0 {
+// 			LogError(head, fmt.Sprintf(
+// 				"could not find runner \"%s\" in config file \"%s\"",
+// 				cmdOn, jobConfig,
+// 			))
+// 			return false
+// 		}
+// 	}
 
-		if len(runners) == 0 {
-			LogError(head, fmt.Sprintf(
-				"could not find runner \"%s\" in config file \"%s\"",
-				cmdOn, jobConfig,
-			))
-			return false
-		}
-	}
+// 	if cmdType == "job" {
+// 		cmdConfig := jobConfig
+// 		if cmd.Config != "" {
+// 			var e error
+// 			cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
+// 			if e != nil {
+// 				LogError(head, fmt.Sprintf(
+// 					"\"%s\" is invalid in config file \"%s\" error: %s",
+// 					cmd.Config,
+// 					jobConfig,
+// 					e.Error(),
+// 				))
+// 				return false
+// 			}
+// 		}
 
-	if cmdType == "job" {
-		cmdConfig := jobConfig
-		if cmd.Config != "" {
-			var e error
-			cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
-			if e != nil {
-				LogError(head, fmt.Sprintf(
-					"\"%s\" is invalid in config file \"%s\" error: %s",
-					cmd.Config,
-					jobConfig,
-					e.Error(),
-				))
-				return false
-			}
-		}
+// 		for _, runner := range runners {
+// 			if !p.runJob(
+// 				cmdConfig,
+// 				env.parseString(cmd.Exec),
+// 				jobEnv.parseEnv(cmd.Env),
+// 				runner,
+// 			) {
+// 				return false
+// 			}
+// 		}
 
-		for _, runner := range runners {
-			if !p.runJob(
-				cmdConfig,
-				env.parseString(cmd.Exec),
-				jobEnv.parseEnv(cmd.Env),
-				runner,
-			) {
-				return false
-			}
-		}
+// 		return true
+// 	} else if cmdType == "cmd" {
+// 		for _, runner := range runners {
+// 			if !runner.RunCommand(
+// 				jobName,
+// 				env.parseString(cmd.Exec),
+// 				env.parseStringArray(cmd.Inputs),
+// 			) {
+// 				return false
+// 			}
+// 		}
 
-		return true
-	} else if cmdType == "cmd" {
-		for _, runner := range runners {
-			if !runner.RunCommand(
-				jobName,
-				env.parseString(cmd.Exec),
-				env.parseStringArray(cmd.Inputs),
-			) {
-				return false
-			}
-		}
+// 		return true
+// 	} else if cmdType == "js" {
+// 		for _, runner := range runners {
+// 			if !p.runScript(
+// 				jobConfig,
+// 				jobName,
+// 				env.parseString(cmd.Exec),
+// 				env,
+// 				runner,
+// 			) {
+// 				return false
+// 			}
+// 		}
 
-		return true
-	} else if cmdType == "js" {
-		for _, runner := range runners {
-			if !p.runScript(
-				jobConfig,
-				jobName,
-				env.parseString(cmd.Exec),
-				env,
-				runner,
-			) {
-				return false
-			}
-		}
+// 		return true
+// 	} else {
+// 		LogError(head, fmt.Sprintf("unknown command type %s", cmdType))
+// 		return false
+// 	}
+// }
 
-		return true
-	} else {
-		LogError(head, fmt.Sprintf("unknown command type %s", cmdType))
-		return false
-	}
-}
+// func (p *Manager) runScript(
+// 	jobConfig string,
+// 	jobName string,
+// 	script string,
+// 	env Env,
+// 	defaultRunner CommandRunner,
+// ) bool {
+// 	head := defaultRunner.Name() + " > " + jobName + ": "
+// 	stdout := &bytes.Buffer{}
+// 	stderr := &bytes.Buffer{}
 
-func (p *Manager) runScript(
-	jobConfig string,
-	jobName string,
-	script string,
-	env Env,
-	defaultRunner CommandRunner,
-) bool {
-	head := defaultRunner.Name() + " > " + jobName + ": "
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
+// 	vm := otto.New()
+// 	_ = vm.Set("dbot", &DbotObject{
+// 		stdout:        stdout,
+// 		stderr:        stderr,
+// 		mgr:           p,
+// 		jobConfig:     jobConfig,
+// 		jobName:       jobName,
+// 		scriptEnv:     env,
+// 		defaultRunner: defaultRunner,
+// 	})
+// 	_, e := vm.Run(script)
+// 	errStr := getStandradOut(stderr.String())
+// 	if e != nil {
+// 		errStr += getStandradOut(e.Error())
+// 	}
 
-	vm := otto.New()
-	_ = vm.Set("dbotLog", func(call otto.FunctionCall) otto.Value {
-		for _, v := range call.ArgumentList {
-			stdout.WriteString(v.String())
-		}
-		stdout.WriteString("\n")
-		return otto.Value{}
-	})
-	_ = vm.Set("dbotError", func(call otto.FunctionCall) otto.Value {
-		for _, v := range call.ArgumentList {
-			stderr.WriteString(v.String())
-		}
-		stderr.WriteString("\n")
-		return otto.Value{}
-	})
+// 	LogScript(head, script, stdout.String(), errStr)
 
-	_, e := vm.Run(script)
-	errStr := getStandradOut(stderr.String())
-	if e != nil {
-		errStr += getStandradOut(e.Error())
-	}
+// 	return e == nil
+// }
 
-	LogScript(head, script, stdout.String(), errStr)
+// func (p *Manager) runCommandAA(jobCtx *Context, job *Job, cmd *Command, index int) bool {
+// 	tmpCtx := jobCtx.Clone().
+// 		SetPathf("%s.commands[%d]", jobCtx.path, index).
+// 		SetEnv(rootEnv.merge(Env{
+// 			"ConfigDir": filepath.Dir(jobCtx.config),
+// 		}).merge(job.Env).merge(jobCtx.env).merge(cmd.Env)).
+// 		SetCommand(nil)
 
-	return e == nil
-}
+// 	var e error
+// 	var runners []CommandRunner
+// 	cmdOn := strings.TrimSpace(tmpCtx.env.parseString(cmd.On))
+// 	if cmdOn == "" {
+// 		runners = []CommandRunner{tmpCtx.runner}
+// 	} else {
+// 		runners, e = tmpCtx.GetRunners(cmdOn)
+// 		if e != nil {
+// 			tmpCtx.LogError(e.Error())
+// 			return false
+// 		}
+// 	}
 
-func (p *Manager) runJob(
-	jobConfig string,
-	jobName string,
-	runningEnv Env,
-	defaultRunner CommandRunner,
-) (ret bool) {
-	head := defaultRunner.Name() + " > " + jobName + ": "
-	LogNotice(head, fmt.Sprintf("Job \"%s > %s\" Start", jobConfig, jobName))
-	defer func() {
-		if ret {
-			LogNotice(
-				head,
-				fmt.Sprintf("Job \"%s > %s\" successful", jobConfig, jobName),
-			)
-		} else {
-			LogError(
-				head,
-				fmt.Sprintf("Job \"%s > %s\" failed", jobConfig, jobName),
-			)
-		}
-	}()
+// 	cmdType := cmd.Type
+// 	if cmdType == "" {
+// 		cmdType = "cmd"
+// 	}
 
-	config, e := p.getConfig(jobConfig)
-	if e != nil {
-		LogError(head, e.Error())
-		return false
-	}
+// 	return false
+// 	// switch cmdType {
+// 	// case "job":
+// 	// 	cmdConfig := tmpCtx.config
+// 	// 	if cmd.Config != "" {
+// 	// 		cmdConfig = strings.TrimSpace(tmpCtx.ParseValue(cmd.Config))
+// 	// 		absPath, e := filepath.Abs(
+// 	// 			filepath.Join(path.Dir(absEntryPath), cmdConfig),
+// 	// 		)
+// 	// 		if ; e != nil {
+// 	// 			tmpCtx.LogError(e.Error())
+// 	// 			return false
+// 	// 		}
 
-	job, e := p.getJob(jobConfig, jobName)
-	if e != nil {
-		LogError(head, e.Error())
-		return false
-	}
+// 	// 		cmdConfig, e = (jobConfig, cmd.Config)
+// 	// 		if e != nil {
+// 	// 			LogError(head, fmt.Sprintf(
+// 	// 				"\"%s\" is invalid in config file \"%s\" error: %s",
+// 	// 				cmd.Config,
+// 	// 				jobConfig,
+// 	// 				e.Error(),
+// 	// 			))
+// 	// 			return false
+// 	// 		}
+// 	// 	}
 
-	concurrency := job.Concurrency
-	commands := job.Commands
+// 	// 	for _, runner := range runners {
+// 	// 		if !p.runJob(
+// 	// 			cmdConfig,
+// 	// 			env.parseString(cmd.Exec),
+// 	// 			jobEnv.parseEnv(cmd.Env),
+// 	// 			runner,
+// 	// 		) {
+// 	// 			return false
+// 	// 		}
+// 	// 	}
 
-	env := rootEnv.merge(Env{
-		"ConfigDir": EnvItem{
-			Value: filepath.Dir(jobConfig),
-		},
-	}).merge(config.Env).merge(job.Env).merge(runningEnv)
+// 	// 	return true
+// 	// }
+// 	// if cmdType == "job" {
+// 	// 	cmdConfig := jobConfig
+// 	// 	if cmd.Config != "" {
+// 	// 		var e error
+// 	// 		cmdConfig, e = GetAbsConfigPathFrom(jobConfig, cmd.Config)
+// 	// 		if e != nil {
+// 	// 			LogError(head, fmt.Sprintf(
+// 	// 				"\"%s\" is invalid in config file \"%s\" error: %s",
+// 	// 				cmd.Config,
+// 	// 				jobConfig,
+// 	// 				e.Error(),
+// 	// 			))
+// 	// 			return false
+// 	// 		}
+// 	// 	}
 
-	if !concurrency {
-		for i := 0; i < len(commands); i++ {
-			command := commands[i]
-			if !p.runCommand(jobConfig, jobName, env, command, defaultRunner) {
-				return false
-			}
-		}
+// 	// 	for _, runner := range runners {
+// 	// 		if !p.runJob(
+// 	// 			cmdConfig,
+// 	// 			env.parseString(cmd.Exec),
+// 	// 			jobEnv.parseEnv(cmd.Env),
+// 	// 			runner,
+// 	// 		) {
+// 	// 			return false
+// 	// 		}
+// 	// 	}
 
-		return true
-	} else {
-		retCH := make(chan bool, len(commands))
+// 	// 	return true
+// 	// } else if cmdType == "cmd" {
+// 	// 	for _, runner := range runners {
+// 	// 		if !runner.RunCommand(
+// 	// 			jobName,
+// 	// 			env.parseString(cmd.Exec),
+// 	// 			env.parseStringArray(cmd.Inputs),
+// 	// 		) {
+// 	// 			return false
+// 	// 		}
+// 	// 	}
 
-		for i := 0; i < len(commands); i++ {
-			go func(command Command) {
-				retCH <- p.runCommand(
-					jobConfig,
-					jobName,
-					env,
-					command,
-					defaultRunner,
-				)
-			}(commands[i])
-		}
+// 	// 	return true
+// 	// } else if cmdType == "js" {
+// 	// 	for _, runner := range runners {
+// 	// 		if !p.runScript(
+// 	// 			jobConfig,
+// 	// 			jobName,
+// 	// 			env.parseString(cmd.Exec),
+// 	// 			env,
+// 	// 			runner,
+// 	// 		) {
+// 	// 			return false
+// 	// 		}
+// 	// 	}
 
-		ret := true
-		for i := 0; i < len(commands); i++ {
-			if !<-retCH {
-				ret = false
-			}
-		}
+// 	// 	return true
+// 	// } else {
+// 	// 	LogError(head, fmt.Sprintf("unknown command type %s", cmdType))
+// 	// 	return false
+// 	// }
 
-		return ret
-	}
-}
+// }
+
+// func (p *Manager) runJob(ctx *Context) (ret bool) {
+// 	jobName := ctx.cmd.Exec
+// 	ctx.LogInfof("Job \"%s > %s\" Start", ctx.config, jobName)
+// 	defer func() {
+// 		if ret {
+// 			ctx.LogInfof("Job \"%s > %s\" successful", ctx.config, jobName)
+// 		} else {
+// 			ctx.LogErrorf("Job \"%s > %s\" failed", ctx.config, jobName)
+// 		}
+// 	}()
+
+// 	job, e := p.getJob(ctx.config, jobName)
+// 	if e != nil {
+// 		ctx.LogError(e.Error())
+// 		return false
+// 	}
+
+// 	// update env
+// 	ctx.SetEnv(
+// 		rootEnv.merge(Env{
+// 			"ConfigDir": filepath.Dir(ctx.config),
+// 		}).merge(job.Env).merge(ctx.env),
+// 	)
+
+// 	concurrency := job.Concurrency
+// 	commands := job.Commands
+
+// 	if !concurrency {
+// 		for i := 0; i < len(commands); i++ {
+// 			command := commands[i]
+// 			if !p.runCommand(ctx, command) {
+// 				return false
+// 			}
+// 		}
+
+// 		return true
+// 	} else {
+// 		retCH := make(chan bool, len(commands))
+
+// 		for i := 0; i < len(commands); i++ {
+// 			go func(command Command) {
+// 				retCH <- p.runCommand(
+// 					ctx.config,
+// 					ctx.exec,
+// 					env,
+// 					command,
+// 					ctx.runner,
+// 				)
+// 			}(commands[i])
+// 		}
+
+// 		ret := true
+// 		for i := 0; i < len(commands); i++ {
+// 			if !<-retCH {
+// 				ret = false
+// 			}
+// 		}
+
+// 		return ret
+// 	}
+// }

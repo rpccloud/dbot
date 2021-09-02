@@ -2,36 +2,46 @@ package dbot
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/fatih/color"
 	"golang.org/x/term"
+	"gopkg.in/yaml.v2"
 )
 
-var gLogLock sync.Mutex
+func getUnmarshalFn(path string) func(data []byte, v interface{}) error {
+	ext := filepath.Ext(path)
+	if ext == ".json" {
+		return json.Unmarshal
+	} else if ext == ".yml" || ext == ".yaml" {
+		return yaml.Unmarshal
+	} else {
+		return nil
+	}
+}
+
+func loadConfig(absPath string, v interface{}) error {
+	if fnUnmarshal := getUnmarshalFn(absPath); fnUnmarshal == nil {
+		return fmt.Errorf("unsupported file extension \"%s\"", absPath)
+	} else if b, e := ioutil.ReadFile(absPath); e != nil {
+		return e
+	} else {
+		ret := fnUnmarshal(b, v)
+		return ret
+	}
+}
 
 func getStandradOut(s string) string {
 	if s != "" && s[len(s)-1] != '\n' {
 		return s + "\n"
 	} else {
 		return s
-	}
-}
-
-func log(a ...interface{}) {
-	gLogLock.Lock()
-	defer gLogLock.Unlock()
-
-	for i := 0; i < len(a); i += 2 {
-		if s := a[i].(string); s != "" {
-			_, _ = color.New(a[i+1].(color.Attribute), color.Bold).Print(s)
-		}
-
 	}
 }
 
@@ -93,15 +103,6 @@ func FilterString(str string, filter []string) bool {
 	}
 
 	return false
-}
-
-func GetAbsConfigPathFrom(
-	currentAbsConfig string,
-	relativePath string,
-) (string, error) {
-	return filepath.Abs(
-		filepath.Join(filepath.Dir(currentAbsConfig), relativePath),
-	)
 }
 
 func ParseCommand(str string) []string {

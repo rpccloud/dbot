@@ -1,319 +1,314 @@
 package dbot
 
-import (
-	"bytes"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
 
-	"golang.org/x/crypto/ssh"
-)
 
-type SSHAuth int
+// type SSHAuth int
 
-const (
-	SSHAuthIdle SSHAuth = iota
-	SSHAuthFixedPassword
-	SSHAuthInputPassword
-	SSHAuthPublicKey
-	SSHAuthPublicKeyRSA
-	SSHAuthPublicKeyDSA
-	SSHAuthPublicKeyECDSA
-	SSHAuthPublicKeyED25519
-	SSHAuthPublicKeyXMSS
-)
+// const (
+// 	SSHAuthIdle SSHAuth = iota
+// 	SSHAuthFixedPassword
+// 	SSHAuthInputPassword
+// 	SSHAuthPublicKey
+// 	SSHAuthPublicKeyRSA
+// 	SSHAuthPublicKeyDSA
+// 	SSHAuthPublicKeyECDSA
+// 	SSHAuthPublicKeyED25519
+// 	SSHAuthPublicKeyXMSS
+// )
 
-type RunnerInput struct {
-	delay  time.Duration
-	reader io.Reader
-	inputs []string
-	stdin  io.Reader
+// type RunnerInput struct {
+// 	delay  time.Duration
+// 	reader io.Reader
+// 	inputs []string
+// 	stdin  io.Reader
 
-	sync.Mutex
-}
+// 	sync.Mutex
+// }
 
-func NewRunnerInput(inputs []string, stdin io.Reader) *RunnerInput {
-	return &RunnerInput{
-		delay:  time.Second,
-		reader: nil,
-		inputs: inputs,
-		stdin:  stdin,
-	}
-}
+// func NewRunnerInput(inputs []string, stdin io.Reader) *RunnerInput {
+// 	return &RunnerInput{
+// 		delay:  time.Second,
+// 		reader: nil,
+// 		inputs: inputs,
+// 		stdin:  stdin,
+// 	}
+// }
 
-func (p *RunnerInput) Read(b []byte) (n int, err error) {
-	p.Lock()
-	defer p.Unlock()
+// func (p *RunnerInput) Read(b []byte) (n int, err error) {
+// 	p.Lock()
+// 	defer p.Unlock()
 
-	time.Sleep(p.delay)
+// 	time.Sleep(p.delay)
 
-	for {
-		if p.reader == nil {
-			if len(p.inputs) > 0 {
-				p.reader = strings.NewReader(p.inputs[0])
-				p.inputs = p.inputs[1:]
-				p.delay = 400 * time.Millisecond
-			} else {
-				p.reader = p.stdin
-				p.stdin = nil
-				p.delay = 0
-			}
-		}
+// 	for {
+// 		if p.reader == nil {
+// 			if len(p.inputs) > 0 {
+// 				p.reader = strings.NewReader(p.inputs[0])
+// 				p.inputs = p.inputs[1:]
+// 				p.delay = 400 * time.Millisecond
+// 			} else {
+// 				p.reader = p.stdin
+// 				p.stdin = nil
+// 				p.delay = 0
+// 			}
+// 		}
 
-		if p.reader == nil {
-			return 0, io.EOF
-		}
+// 		if p.reader == nil {
+// 			return 0, io.EOF
+// 		}
 
-		if n, e := p.reader.Read(b); e != io.EOF {
-			return n, e
-		}
+// 		if n, e := p.reader.Read(b); e != io.EOF {
+// 			return n, e
+// 		}
 
-		p.reader = nil
-	}
-}
+// 		p.reader = nil
+// 	}
+// }
 
-type CommandRunner interface {
-	Name() string
-	RunCommand(
-		jobName string,
-		command string,
-		inputs []string,
-	) bool
-}
+// type CommandRunner interface {
+// 	Name() string
+// 	RunCommand(
+// 		jobName string,
+// 		command string,
+// 		inputs []string,
+// 	) bool
+// }
 
-type LocalRunner struct {
-	name string
+// type DbotRunner struct {
+// }
 
-	sync.Mutex
-}
+// func (p *DbotRunner) Name() string {
+// 	return fmt.Sprintf("%s@dbot", os.Getenv("USER"))
+// }
 
-func (p *LocalRunner) Name() string {
-	return p.name
-}
+// func (p *DbotRunner) RunCommand(
+// 	jobName string,
+// 	command string,
+// 	inputs []string,
+// ) bool {
+// 	return false
+// }
 
-func (p *LocalRunner) RunCommand(
-	jobName string,
-	command string,
-	inputs []string,
-) bool {
-	p.Lock()
-	defer p.Unlock()
+// type LocalRunner struct {
+// 	sync.Mutex
+// }
 
-	head := p.Name() + " > " + jobName + ": "
-	cmdArray := ParseCommand(command)
+// func (p *LocalRunner) Name() string {
+// 	return fmt.Sprintf("%s@local", os.Getenv("USER"))
+// }
 
-	var cmd *exec.Cmd
-	if len(cmdArray) == 1 {
-		cmd = exec.Command(cmdArray[0])
-	} else if len(cmdArray) > 1 {
-		cmd = exec.Command(cmdArray[0], cmdArray[1:]...)
-	} else {
-		LogCommand(head, command, "", "the command is empty")
-		return false
-	}
+// func (p *LocalRunner) RunCommand(
+// 	jobName string,
+// 	command string,
+// 	inputs []string,
+// ) bool {
+// 	p.Lock()
+// 	defer p.Unlock()
 
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	cmd.Stdin = NewRunnerInput(inputs, nil)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	e := cmd.Run()
+// 	head := p.Name() + " > " + jobName + ": "
+// 	cmdArray := ParseCommand(command)
 
-	outString := ""
-	errString := ""
-	if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
-		outString += s
-	}
+// 	var cmd *exec.Cmd
+// 	if len(cmdArray) == 1 {
+// 		cmd = exec.Command(cmdArray[0])
+// 	} else if len(cmdArray) > 1 {
+// 		cmd = exec.Command(cmdArray[0], cmdArray[1:]...)
+// 	} else {
+// 		LogCommand(head, command, "", "the command is empty")
+// 		return false
+// 	}
 
-	if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
-		errString += s
-	}
+// 	stdout := &bytes.Buffer{}
+// 	stderr := &bytes.Buffer{}
+// 	cmd.Stdin = NewRunnerInput(inputs, nil)
+// 	cmd.Stdout = stdout
+// 	cmd.Stderr = stderr
+// 	e := cmd.Run()
 
-	if e != nil {
-		errString += getStandradOut(e.Error())
-	}
+// 	outString := ""
+// 	errString := ""
+// 	if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
+// 		outString += s
+// 	}
 
-	LogCommand(head, command, outString, errString)
-	return e == nil
-}
+// 	if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
+// 		errString += s
+// 	}
 
-type SSHRunner struct {
-	name     string
-	port     uint16
-	user     string
-	host     string
-	password string
+// 	if e != nil {
+// 		errString += getStandradOut(e.Error())
+// 	}
 
-	sync.Mutex
-}
+// 	LogCommand(head, command, outString, errString)
+// 	return e == nil
+// }
 
-func NewSSHRunner(
-	name string,
-	port uint16,
-	user string,
-	host string,
-) (*SSHRunner, error) {
-	if port == 0 {
-		port = 22
-	}
+// type SSHRunner struct {
+// 	name     string
+// 	port     uint16
+// 	user     string
+// 	host     string
+// 	password string
 
-	ret := &SSHRunner{
-		name:     name,
-		port:     port,
-		user:     user,
-		host:     host,
-		password: "",
-	}
+// 	sync.Mutex
+// }
 
-	client, e := ret.getClient(SSHAuthIdle)
-	if e != nil {
-		return nil, e
-	}
-	_ = client.Close()
+// func NewSSHRunner(
+// 	port uint16,
+// 	user string,
+// 	host string,
+// ) (*SSHRunner, error) {
+// 	ret := &SSHRunner{
+// 		port:     port,
+// 		user:     user,
+// 		host:     host,
+// 		password: "",
+// 	}
 
-	if ret.password == "" {
-		LogInput(fmt.Sprintf("Use PublicKey on %s@%s\n", ret.user, ret.host))
-	}
+// 	client, e := ret.getClient(SSHAuthIdle)
+// 	if e != nil {
+// 		return nil, e
+// 	}
+// 	_ = client.Close()
 
-	return ret, nil
-}
+// 	if ret.password == "" {
+// 		LogInput(fmt.Sprintf("Use PublicKey on %s@%s\n", ret.user, ret.host))
+// 	}
 
-func (p *SSHRunner) Name() string {
-	return p.name
-}
+// 	return ret, nil
+// }
 
-func (p *SSHRunner) RunCommand(
-	jobName string,
-	command string,
-	inputs []string,
-) bool {
-	p.Lock()
-	defer p.Unlock()
+// func (p *SSHRunner) Name() string {
+// 	return fmt.Sprintf("%s@%s", p.user, p.host)
+// }
 
-	head := p.Name() + " > " + jobName + ": "
+// func (p *SSHRunner) RunCommand(
+// 	jobName string,
+// 	command string,
+// 	inputs []string,
+// ) bool {
+// 	p.Lock()
+// 	defer p.Unlock()
 
-	if client, e := p.getClient(SSHAuthIdle); e != nil {
-		LogError(head, e.Error())
-		return false
-	} else if session, e := client.NewSession(); e != nil {
-		_ = client.Close()
-		LogError(head, e.Error())
-		return false
-	} else {
-		defer func() {
-			_ = session.Close()
-			_ = client.Close()
-		}()
+// 	head := p.Name() + " > " + jobName + ": "
 
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		session.Stdin = NewRunnerInput(inputs, nil)
-		session.Stdout = stdout
-		session.Stderr = stderr
-		e = session.Run(command)
-		outString := ""
-		errString := ""
-		if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
-			outString += s
-		}
+// 	if client, e := p.getClient(SSHAuthIdle); e != nil {
+// 		LogError(head, e.Error())
+// 		return false
+// 	} else if session, e := client.NewSession(); e != nil {
+// 		_ = client.Close()
+// 		LogError(head, e.Error())
+// 		return false
+// 	} else {
+// 		defer func() {
+// 			_ = session.Close()
+// 			_ = client.Close()
+// 		}()
 
-		if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
-			errString += s
-		}
+// 		stdout := &bytes.Buffer{}
+// 		stderr := &bytes.Buffer{}
+// 		session.Stdin = NewRunnerInput(inputs, nil)
+// 		session.Stdout = stdout
+// 		session.Stderr = stderr
+// 		e = session.Run(command)
+// 		outString := ""
+// 		errString := ""
+// 		if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
+// 			outString += s
+// 		}
 
-		if e != nil {
-			errString += getStandradOut(e.Error())
-		}
+// 		if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
+// 			errString += s
+// 		}
 
-		LogCommand(head, command, outString, errString)
-		return e == nil
-	}
-}
+// 		if e != nil {
+// 			errString += getStandradOut(e.Error())
+// 		}
 
-func (p *SSHRunner) getClient(auth SSHAuth) (client *ssh.Client, ret error) {
-	fnGetPublicKeyConfig := func(fileName string) (*ssh.ClientConfig, error) {
-		keyPath := filepath.Join(os.Getenv("HOME"), ".ssh", fileName)
-		if key, e := ioutil.ReadFile(keyPath); e != nil {
-			return nil, fmt.Errorf("ssh: read private key: %s", e.Error())
-		} else if signer, e := ssh.ParsePrivateKey(key); e != nil {
-			return nil, fmt.Errorf("ssh: parse private key: %s", e.Error())
-		} else {
-			return &ssh.ClientConfig{
-				User:            p.user,
-				Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			}, nil
-		}
-	}
+// 		LogCommand(head, command, outString, errString)
+// 		return e == nil
+// 	}
+// }
 
-	fnGetPassworldConfig := func(password string) *ssh.ClientConfig {
-		return &ssh.ClientConfig{
-			User:            p.user,
-			Auth:            []ssh.AuthMethod{ssh.Password(p.password)},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		}
-	}
+// func (p *SSHRunner) getClient(auth SSHAuth) (client *ssh.Client, ret error) {
+// 	fnGetPublicKeyConfig := func(fileName string) (*ssh.ClientConfig, error) {
+// 		keyPath := filepath.Join(os.Getenv("HOME"), ".ssh", fileName)
+// 		if key, e := ioutil.ReadFile(keyPath); e != nil {
+// 			return nil, fmt.Errorf("ssh: read private key: %s", e.Error())
+// 		} else if signer, e := ssh.ParsePrivateKey(key); e != nil {
+// 			return nil, fmt.Errorf("ssh: parse private key: %s", e.Error())
+// 		} else {
+// 			return &ssh.ClientConfig{
+// 				User:            p.user,
+// 				Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+// 				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+// 			}, nil
+// 		}
+// 	}
 
-	var clientCfg *ssh.ClientConfig
+// 	fnGetPassworldConfig := func(password string) *ssh.ClientConfig {
+// 		return &ssh.ClientConfig{
+// 			User:            p.user,
+// 			Auth:            []ssh.AuthMethod{ssh.Password(p.password)},
+// 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+// 		}
+// 	}
 
-	switch auth {
-	case SSHAuthIdle:
-		if p.password != "" {
-			return p.getClient(SSHAuthFixedPassword)
-		}
+// 	var clientCfg *ssh.ClientConfig
 
-		if client, ret = p.getClient(SSHAuthPublicKey); ret == nil {
-			return
-		}
+// 	switch auth {
+// 	case SSHAuthIdle:
+// 		if p.password != "" {
+// 			return p.getClient(SSHAuthFixedPassword)
+// 		}
 
-		return p.getClient(SSHAuthInputPassword)
-	case SSHAuthFixedPassword:
-		clientCfg = fnGetPassworldConfig(p.password)
-	case SSHAuthInputPassword:
-		if p.password, ret = GetPasswordFromUser(
-			fmt.Sprintf("Password for %s@%s: ", p.user, p.host),
-		); ret != nil {
-			return
-		}
-		clientCfg = fnGetPassworldConfig(p.password)
-	case SSHAuthPublicKey:
-		for _, keyAuth := range []SSHAuth{
-			SSHAuthPublicKeyRSA, SSHAuthPublicKeyDSA, SSHAuthPublicKeyECDSA,
-			SSHAuthPublicKeyED25519, SSHAuthPublicKeyXMSS,
-		} {
-			if client, ret = p.getClient(keyAuth); ret == nil {
-				return
-			}
-		}
+// 		if client, ret = p.getClient(SSHAuthPublicKey); ret == nil {
+// 			return
+// 		}
 
-		return nil, fmt.Errorf("ssh: connect by publicKey failed")
-	case SSHAuthPublicKeyRSA:
-		if clientCfg, ret = fnGetPublicKeyConfig("id_rsa"); ret != nil {
-			return
-		}
-	case SSHAuthPublicKeyDSA:
-		if clientCfg, ret = fnGetPublicKeyConfig("id_dsa"); ret != nil {
-			return
-		}
-	case SSHAuthPublicKeyECDSA:
-		if clientCfg, ret = fnGetPublicKeyConfig("id_ecdsa"); ret != nil {
-			return
-		}
-	case SSHAuthPublicKeyED25519:
-		if clientCfg, ret = fnGetPublicKeyConfig("id_ed25519"); ret != nil {
-			return
-		}
-	case SSHAuthPublicKeyXMSS:
-		if clientCfg, ret = fnGetPublicKeyConfig("id_xmss"); ret != nil {
-			return
-		}
-	}
+// 		return p.getClient(SSHAuthInputPassword)
+// 	case SSHAuthFixedPassword:
+// 		clientCfg = fnGetPassworldConfig(p.password)
+// 	case SSHAuthInputPassword:
+// 		if p.password, ret = GetPasswordFromUser(fmt.Sprintf(
+// 			"Password for ssh -p %d %s@%s: ",
+// 			p.port, p.user, p.host),
+// 		); ret != nil {
+// 			return
+// 		}
+// 		clientCfg = fnGetPassworldConfig(p.password)
+// 	case SSHAuthPublicKey:
+// 		for _, keyAuth := range []SSHAuth{
+// 			SSHAuthPublicKeyRSA, SSHAuthPublicKeyDSA, SSHAuthPublicKeyECDSA,
+// 			SSHAuthPublicKeyED25519, SSHAuthPublicKeyXMSS,
+// 		} {
+// 			if client, ret = p.getClient(keyAuth); ret == nil {
+// 				return
+// 			}
+// 		}
 
-	return ssh.Dial("tcp", fmt.Sprintf("%s:%d", p.host, p.port), clientCfg)
-}
+// 		return nil, fmt.Errorf("ssh: connect by publicKey failed")
+// 	case SSHAuthPublicKeyRSA:
+// 		if clientCfg, ret = fnGetPublicKeyConfig("id_rsa"); ret != nil {
+// 			return
+// 		}
+// 	case SSHAuthPublicKeyDSA:
+// 		if clientCfg, ret = fnGetPublicKeyConfig("id_dsa"); ret != nil {
+// 			return
+// 		}
+// 	case SSHAuthPublicKeyECDSA:
+// 		if clientCfg, ret = fnGetPublicKeyConfig("id_ecdsa"); ret != nil {
+// 			return
+// 		}
+// 	case SSHAuthPublicKeyED25519:
+// 		if clientCfg, ret = fnGetPublicKeyConfig("id_ed25519"); ret != nil {
+// 			return
+// 		}
+// 	case SSHAuthPublicKeyXMSS:
+// 		if clientCfg, ret = fnGetPublicKeyConfig("id_xmss"); ret != nil {
+// 			return
+// 		}
+// 	}
+
+// 	return ssh.Dial("tcp", fmt.Sprintf("%s:%d", p.host, p.port), clientCfg)
+// }
