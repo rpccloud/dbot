@@ -145,21 +145,19 @@ func (p *TaskRunner) prepareRemoteList(
 	key string,
 	list []*Remote,
 ) bool {
-	// TODO: host port user  are not parsed by env
 	group := make([]string, 0)
 
 	for idx, it := range list {
-		port := it.Port
-		if port == "" {
-			port = "22"
-		}
+		host := ctx.GetContextEnv().ParseString(it.Host, "", true)
+		user := ctx.GetContextEnv().ParseString(it.User, "", true)
+		port := ctx.GetContextEnv().ParseString(it.Port, "22", true)
 
-		id := fmt.Sprintf("%s@%s:%s", it.User, it.Host, port)
+		id := fmt.Sprintf("%s@%s:%s", user, host, port)
 		if gXManager.GetRunner(id) == nil {
 			ssh, e := NewSSHRunner(
 				port,
-				it.User,
-				it.Host,
+				user,
+				host,
 			)
 			if e != nil {
 				ctx.Clone().
@@ -238,7 +236,11 @@ func (p *TaskRunner) Prepare(ctx *XContext) bool {
 			return false
 		}
 		if !p.prepareRemoteList(
-			ctx.CreateImportContext(importName, improtConfigPath, contextEnv),
+			ctx.CreateImportContext(
+				importName,
+				improtConfigPath,
+				contextEnv.ParseEnv(it.Env),
+			),
 			key,
 			list,
 		) {
@@ -506,5 +508,5 @@ func (p *SSHRunner) getClient(auth SSHAuth) (client *ssh.Client, ret error) {
 		}
 	}
 
-	return ssh.Dial("tcp", fmt.Sprintf("%s:%d", p.host, p.port), clientCfg)
+	return ssh.Dial("tcp", fmt.Sprintf("%s:%s", p.host, p.port), clientCfg)
 }

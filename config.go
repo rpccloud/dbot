@@ -3,6 +3,7 @@ package dbot
 type Import struct {
 	Name   string
 	Config string
+	Env    Env
 }
 
 type Input struct {
