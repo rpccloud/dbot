@@ -11,19 +11,18 @@ tasks:
     imports:
       EtcdServers: 
         config: ./remotes.yml
-        name: EtcdServers
-    inputs: 
-      EtcdName: 
-        type: text
-        desc: "Input etcd cluster name: "
-      EtcdPassword:
-        type: password
-        desc: "Input etcd password: "
-    job:
-      config:  ../examples/etcd/main.yml
-      name: initEtcdNodeCA
-run: 
-  - installEtcds
+        name: etcdServers
+    # inputs: 
+    #   EtcdName: 
+    #     type: text
+    #     desc: "Input etcd cluster name: "
+    #   EtcdPassword:
+    #     type: password
+    #     desc: "Input etcd password: "
+    config: ../examples/etcd/main.yml
+    run: initEtcdNodeCA
+main: 
+  - installEtcd
     
 # jobs:
 #   install:

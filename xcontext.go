@@ -65,10 +65,11 @@ func NewRootContext(absConfig string) *XContext {
 	}
 }
 
-func (p *XContext) CreateTaskContext(name string) *XContext {
+func (p *XContext) CreateTaskContext(name string, env Env) *XContext {
 	return &XContext{
 		parent:  p,
 		task:    nil,
+		env:     env.Merge(nil),
 		current: "task." + name,
 		cmd: &Command{
 			Type:   "task",
@@ -82,11 +83,16 @@ func (p *XContext) CreateTaskContext(name string) *XContext {
 	}
 }
 
-func (p *XContext) CreateImportContext(name string, config string) *XContext {
+func (p *XContext) CreateImportContext(
+	name string,
+	config string,
+	env Env,
+) *XContext {
 	return &XContext{
 		parent:  p,
 		task:    p.task,
 		current: name,
+		env:     env.Merge(nil),
 		cmd: &Command{
 			Type:   "import",
 			Exec:   name,
@@ -187,12 +193,21 @@ func (p *XContext) RootEnv() Env {
 	}))
 }
 
-func (p *XContext) GetEnv() Env {
-	return p.env
+func (p *XContext) GetContextEnv() Env {
+	return p.env.Merge(nil)
 }
 
-func (p *XContext) SetEnv(env Env) *XContext {
-	p.env = env
+func (p *XContext) GetCommandEnv() Env {
+	return p.cmd.Env.Merge(nil)
+}
+
+func (p *XContext) SetContextEnv(env Env) *XContext {
+	p.env = env.Merge(nil)
+	return p
+}
+
+func (p *XContext) SetCommandEnv(env Env) *XContext {
+	p.cmd.Env = env.Merge(nil)
 	return p
 }
 

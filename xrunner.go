@@ -114,8 +114,8 @@ func (p *MainRunner) Prepare(ctx *XContext) bool {
 		return false
 	}
 
-	for _, taskName := range config.Run {
-		taskCtx := ctx.CreateTaskContext(taskName)
+	for _, taskName := range config.Main {
+		taskCtx := ctx.CreateTaskContext(taskName, nil)
 
 		if taskCtx == nil {
 			return false
@@ -132,7 +132,8 @@ func (p *MainRunner) Prepare(ctx *XContext) bool {
 }
 
 type TaskRunner struct {
-	sync.Mutex
+	// jobName   string
+	// jobConfig string
 }
 
 func (p *TaskRunner) Name() string {
@@ -144,15 +145,16 @@ func (p *TaskRunner) prepareRemoteList(
 	key string,
 	list []*Remote,
 ) bool {
+	// TODO: host port user  are not parsed by env
 	group := make([]string, 0)
 
 	for idx, it := range list {
 		port := it.Port
-		if port == 0 {
-			port = 22
+		if port == "" {
+			port = "22"
 		}
 
-		id := fmt.Sprintf("%s@%s:%d", it.User, it.Host, port)
+		id := fmt.Sprintf("%s@%s:%s", it.User, it.Host, port)
 		if gXManager.GetRunner(id) == nil {
 			ssh, e := NewSSHRunner(
 				port,
@@ -190,34 +192,36 @@ func (p *TaskRunner) Prepare(ctx *XContext) bool {
 
 	ctx.SetTask(task)
 	// prepare env
-	taskEnv := ctx.RootEnv().Merge(task.Env)
-	mergeEnv := ctx.RootEnv().Merge(task.Env)
+	commandEnv := ctx.RootEnv().ParseEnv(task.Env)
+	contextEnv := ctx.RootEnv().Merge(commandEnv)
 	for key, it := range task.Inputs {
 		ctx.Clone().
 			SetCurrentf("%s.inputs.%s", ctx.current, key).
 			LogInfo("")
-		itDesc := taskEnv.ParseString(it.Desc, "input "+key+": ", false)
-		itType := taskEnv.ParseString(it.Type, "text", true)
+		itDesc := contextEnv.ParseString(it.Desc, "input "+key+": ", false)
+		itType := contextEnv.ParseString(it.Type, "text", true)
 		value, ok := ctx.GetUserInput(itDesc, itType)
 		if !ok {
 			return false
 		}
-		mergeEnv[key] = taskEnv.ParseString(value, "", false)
+		commandEnv[key] = contextEnv.ParseString(value, "", false)
 	}
-	ctx.SetEnv(mergeEnv)
+	contextEnv = ctx.RootEnv().Merge(commandEnv)
+	ctx.SetContextEnv(contextEnv)
+	ctx.SetCommandEnv(commandEnv)
 
 	// prepare imports
 	task.groupMap = make(map[string][]string)
 	for key, it := range task.Imports {
-		importName := mergeEnv.ParseString(it.Name, "", true)
+		importName := contextEnv.ParseString(it.Name, "", true)
 		improtConfigPath, ok := ctx.Clone().
-			SetCurrentf("%s.imports.%s", ctx.current, key).
-			AbsPath(mergeEnv.ParseString(it.Config, "", true))
+			SetCurrentf("%s.imports.%s.config", ctx.current, key).
+			AbsPath(contextEnv.ParseString(it.Config, "", true))
 		if !ok {
 			return false
 		}
 		importConfig := ctx.Clone().
-			SetCurrentf("%s.imports.%s", ctx.current, key).
+			SetCurrentf("%s.imports.%s.config", ctx.current, key).
 			LoadRemoteConfig(improtConfigPath)
 		if importConfig == nil {
 			return false
@@ -226,7 +230,7 @@ func (p *TaskRunner) Prepare(ctx *XContext) bool {
 		list, ok := importConfig[importName]
 		if !ok {
 			ctx.Clone().
-				SetCurrentf("%s.%s.name", ctx.current, key).
+				SetCurrentf("%s.imports.%s.name", ctx.current, key).
 				LogErrorf(
 					"could not find \"%s\" in \"%s\"",
 					it.Name, improtConfigPath,
@@ -234,7 +238,7 @@ func (p *TaskRunner) Prepare(ctx *XContext) bool {
 			return false
 		}
 		if !p.prepareRemoteList(
-			ctx.CreateImportContext(importName, improtConfigPath),
+			ctx.CreateImportContext(importName, improtConfigPath, contextEnv),
 			key,
 			list,
 		) {
@@ -257,7 +261,12 @@ func (p *TaskRunner) Prepare(ctx *XContext) bool {
 }
 
 func (p *TaskRunner) Run(ctx *XContext) bool {
-	fmt.Println("Run Task ", ctx.cmd)
+	// taskName := ctx.GetEnv().ParseString(ctx.cmd.Exec, "", true)
+
+	// taskPath, ok := ctx.Clone().
+	// 	SetCurrentf("%s.imports.%s", ctx.current).
+	// 	AbsPath(ctx.GetEnv().ParseString(ctx.cmd.Config, "", true))
+	// fmt.Println("Run Task ", ctx.cmd)
 	return false
 }
 
@@ -324,7 +333,7 @@ func (p *LocalRunner) RunCommand(
 }
 
 type SSHRunner struct {
-	port     uint16
+	port     string
 	user     string
 	host     string
 	password string
@@ -333,7 +342,7 @@ type SSHRunner struct {
 }
 
 func NewSSHRunner(
-	port uint16,
+	port string,
 	user string,
 	host string,
 ) (*SSHRunner, error) {
@@ -458,7 +467,7 @@ func (p *SSHRunner) getClient(auth SSHAuth) (client *ssh.Client, ret error) {
 		clientCfg = fnGetPassworldConfig(p.password)
 	case SSHAuthInputPassword:
 		if p.password, ret = GetPasswordFromUser(fmt.Sprintf(
-			"Password for ssh -p %d %s@%s: ",
+			"Password for ssh -p %s %s@%s: ",
 			p.port, p.user, p.host),
 		); ret != nil {
 			return

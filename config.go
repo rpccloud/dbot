@@ -11,24 +11,24 @@ type Input struct {
 }
 
 type Remote struct {
-	Port uint16
+	Port string
 	User string
 	Host string
 }
 
 type Task struct {
-	Inputs  map[string]*Input
-	Imports map[string]*Import
-	Remotes map[string][]*Remote
-	Env     Env
-	Job     *Import
-
+	Inputs   map[string]*Input
+	Imports  map[string]*Import
+	Remotes  map[string][]*Remote
+	Env      Env
+	Config   string
+	Run      string
 	groupMap map[string][]string
 }
 
 type MainConfig struct {
 	Name  string
-	Run   []string
+	Main  []string
 	Tasks map[string]*Task
 }
 
