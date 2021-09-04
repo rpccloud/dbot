@@ -2,123 +2,13 @@ package context
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/crypto/ssh"
 )
-
-type RunnerInput struct {
-	delay  time.Duration
-	reader io.Reader
-	inputs []string
-	stdin  io.Reader
-
-	sync.Mutex
-}
-
-func NewRunnerInput(inputs []string, stdin io.Reader) *RunnerInput {
-	return &RunnerInput{
-		delay:  time.Second,
-		reader: nil,
-		inputs: inputs,
-		stdin:  stdin,
-	}
-}
-
-func (p *RunnerInput) Read(b []byte) (n int, err error) {
-	p.Lock()
-	defer p.Unlock()
-
-	time.Sleep(p.delay)
-
-	for {
-		if p.reader == nil {
-			if len(p.inputs) > 0 {
-				p.reader = strings.NewReader(p.inputs[0])
-				p.inputs = p.inputs[1:]
-				p.delay = 400 * time.Millisecond
-			} else {
-				p.reader = p.stdin
-				p.stdin = nil
-				p.delay = 0
-			}
-		}
-
-		if p.reader == nil {
-			return 0, io.EOF
-		}
-
-		if n, e := p.reader.Read(b); e != io.EOF {
-			return n, e
-		}
-
-		p.reader = nil
-	}
-}
-
-type Runner interface {
-	Run(ctx Context) bool
-}
-
-type LocalRunner struct {
-	sync.Mutex
-}
-
-func (p *LocalRunner) Run(ctx Context) bool {
-	return false
-}
-
-// func (p *LocalRunner) RunCommand(
-// 	jobName string,
-// 	command string,
-// 	inputs []string,
-// ) bool {
-// 	p.Lock()
-// 	defer p.Unlock()
-
-// 	head := p.Name() + " > " + jobName + ": "
-// 	cmdArray := ParseCommand(command)
-
-// 	var cmd *exec.Cmd
-// 	if len(cmdArray) == 1 {
-// 		cmd = exec.Command(cmdArray[0])
-// 	} else if len(cmdArray) > 1 {
-// 		cmd = exec.Command(cmdArray[0], cmdArray[1:]...)
-// 	} else {
-// 		LogCommand(head, command, "", "the command is empty")
-// 		return false
-// 	}
-
-// 	stdout := &bytes.Buffer{}
-// 	stderr := &bytes.Buffer{}
-// 	cmd.Stdin = NewRunnerInput(inputs, nil)
-// 	cmd.Stdout = stdout
-// 	cmd.Stderr = stderr
-// 	e := cmd.Run()
-
-// 	outString := ""
-// 	errString := ""
-// 	if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
-// 		outString += s
-// 	}
-
-// 	if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
-// 		errString += s
-// 	}
-
-// 	if e != nil {
-// 		errString += getStandradOut(e.Error())
-// 	}
-
-// 	LogCommand(head, command, outString, errString)
-// 	return e == nil
-// }
 
 type SSHRunner struct {
 	port     string
