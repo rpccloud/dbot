@@ -194,7 +194,6 @@ func (p *BaseContext) Log(outStr string, errStr string) {
 
 	logItems = append(logItems, " > ")
 	logItems = append(logItems, color.FgGreen)
-
 	logItems = append(logItems, p.config)
 	logItems = append(logItems, color.FgYellow)
 
