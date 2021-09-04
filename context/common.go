@@ -8,8 +8,6 @@ import (
 	"github.com/fatih/color"
 )
 
-
-
 var gLogLock sync.Mutex
 
 func log(a ...interface{}) {
