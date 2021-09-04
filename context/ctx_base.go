@@ -79,39 +79,33 @@ func (p *BaseContext) AbsPath(path string) (string, bool) {
 	}
 }
 
-func (p *BaseContext) LoadConfig(config string, v interface{}) bool {
+func (p *BaseContext) LoadConfig(v interface{}) bool {
 	var fnUnmarshal (func(data []byte, v interface{}) error)
 
-	// Get abs path of config
-	absPath, ok := p.AbsPath(config)
-	if !ok {
-		return false
-	}
-
 	// If config is a directory, we try to find default config file
-	if IsDir(absPath) {
-		yamlFile := filepath.Join(absPath, "main.yaml")
-		ymlFile := filepath.Join(absPath, "main.yml")
-		jsonFile := filepath.Join(absPath, "main.json")
+	if IsDir(p.config) {
+		yamlFile := filepath.Join(p.config, "main.yaml")
+		ymlFile := filepath.Join(p.config, "main.yml")
+		jsonFile := filepath.Join(p.config, "main.json")
 
 		if IsFile(yamlFile) {
-			absPath = yamlFile
+			p.config = yamlFile
 		} else if IsFile(ymlFile) {
-			absPath = ymlFile
+			p.config = ymlFile
 		} else if IsFile(jsonFile) {
-			absPath = jsonFile
+			p.config = jsonFile
 		} else {
 			p.LogErrorf(
 				"could not found main.yaml or main.yml or main.json "+
 					"in directory \"%s\"\n",
-				absPath,
+				p.config,
 			)
 			return false
 		}
 	}
 
 	// Check the file extension, and set corresponding unmarshal func
-	ext := filepath.Ext(absPath)
+	ext := filepath.Ext(p.config)
 	switch ext {
 	case ".json":
 		fnUnmarshal = json.Unmarshal
@@ -120,12 +114,12 @@ func (p *BaseContext) LoadConfig(config string, v interface{}) bool {
 	case ".yaml":
 		fnUnmarshal = yaml.Unmarshal
 	default:
-		p.LogErrorf("unsupported file extension \"%s\"", absPath)
+		p.LogErrorf("unsupported file extension \"%s\"", p.config)
 		return false
 	}
 
 	// Read the config file, and unmarshal it to config structure
-	if b, e := ioutil.ReadFile(absPath); e != nil {
+	if b, e := ioutil.ReadFile(p.config); e != nil {
 		p.LogError(e.Error())
 		return false
 	} else if e := fnUnmarshal(b, v); e != nil {

@@ -7,14 +7,6 @@ import (
 	"strings"
 )
 
-type RootContext struct {
-	rootConfig     *RootConfig
-	runnerGroupMap map[string][]string
-	runnerMap      map[string]Runner
-	runContexts    []*CommandContext
-	BaseContext
-}
-
 func loadSSHGroup(ctx Context, key string, list []*Remote) bool {
 	rootContext := ctx.GetRootContext()
 
@@ -49,7 +41,15 @@ func loadSSHGroup(ctx Context, key string, list []*Remote) bool {
 	return true
 }
 
-func NewMainContext(config string) *RootContext {
+type RootContext struct {
+	rootConfig     *RootConfig
+	runnerGroupMap map[string][]string
+	runnerMap      map[string]Runner
+	runContexts    []*CommandContext
+	BaseContext
+}
+
+func NewRootContext(config string) *RootContext {
 	ret := &RootContext{
 		rootConfig:     &RootConfig{},
 		runnerGroupMap: make(map[string][]string),
@@ -161,6 +161,11 @@ func (p *RootContext) GetRootContext() *RootContext {
 }
 
 func (p *RootContext) load() bool {
+	// Load Config
+	if !p.LoadConfig(p.rootConfig) {
+		return false
+	}
+
 	// Load imports
 	for key, it := range p.rootConfig.Imports {
 		name := Env{}.ParseString(it.Name, "", true)

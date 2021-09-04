@@ -13,7 +13,7 @@ func (p *ImportContext) Clone(pathFormat string, a ...interface{}) Context {
 }
 
 func (p *ImportContext) Run() bool {
-	return p.LoadConfig(p.BaseContext.config, &p.importConfig)
+	return p.LoadConfig(&p.importConfig)
 }
 
 func (p *ImportContext) GetSSHGroup(name string) []*Remote {
