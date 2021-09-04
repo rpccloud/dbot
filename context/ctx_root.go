@@ -11,7 +11,7 @@ func loadSSHGroup(ctx Context, key string, list []*Remote) bool {
 	rootContext := ctx.GetRootContext()
 
 	if rootContext == nil {
-		ctx.LogErrorf("kernel error: could not get RootContext")
+		ctx.LogError("kernel error: could not get RootContext")
 		return false
 	}
 
@@ -144,7 +144,7 @@ func (p *RootContext) newCommandContext(
 func (p *RootContext) Run() bool {
 	// Check
 	if len(p.runContexts) == 0 {
-		p.Clone("main").LogErrorf("could not found valid task")
+		p.Clone("main").LogError("could not found valid task")
 		return false
 	}
 
@@ -191,7 +191,7 @@ func (p *RootContext) load() bool {
 	for key, sshGroup := range p.rootConfig.Remotes {
 		if len(sshGroup) == 0 {
 			p.Clone("imports.%s", key).
-				LogErrorf("SSHGroup \"%s\" is empty", key)
+				LogError("SSHGroup \"%s\" is empty", key)
 			return false
 		} else if !loadSSHGroup(p, key, sshGroup) {
 			return false
@@ -207,7 +207,7 @@ func (p *RootContext) load() bool {
 		// Get task
 		task, ok := p.rootConfig.Tasks[taskName]
 		if !ok {
-			p.Clone("main[%d]", idx).LogErrorf("task \"%s\"")
+			p.Clone("main[%d]", idx).LogError("task \"%s\"")
 			return false
 		}
 
@@ -216,7 +216,7 @@ func (p *RootContext) load() bool {
 		contextEnv := p.RootEnv().Merge(taskEnv)
 		for key, it := range task.Inputs {
 			ctx := p.Clone("tasks.%s.inputs.%s", taskName, key)
-			ctx.LogInfof("")
+			ctx.LogInfo("")
 			itDesc := contextEnv.ParseString(it.Desc, "input "+key+": ", false)
 			itType := contextEnv.ParseString(it.Type, "text", true)
 			value, ok := ctx.GetUserInput(itDesc, itType)

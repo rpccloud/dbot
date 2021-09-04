@@ -113,7 +113,7 @@ func (p *SSHRunner) getClient(ctx Context) *ssh.Client {
 
 		if e != nil {
 			if log {
-				ctx.LogErrorf(e.Error())
+				ctx.LogError(e.Error())
 			}
 			return nil
 		}
@@ -129,7 +129,7 @@ func (p *SSHRunner) getClient(ctx Context) *ssh.Client {
 		ret, e := ssh.Dial("tcp", fmt.Sprintf("%s:%s", p.host, p.port), cfg)
 		if e != nil {
 			if log {
-				c.LogErrorf(e.Error())
+				c.LogError(e.Error())
 			}
 			return nil
 		}

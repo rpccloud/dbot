@@ -18,8 +18,8 @@ type Context interface {
 	GetParent() Context
 	GetRootContext() *RootContext
 	GetUserInput(desc string, mode string) (string, bool)
-	LogInfof(format string, a ...interface{})
-	LogErrorf(format string, a ...interface{})
+	LogInfo(format string, a ...interface{})
+	LogError(format string, a ...interface{})
 	Clone(pathFormat string, a ...interface{}) Context
 	RootEnv() Env
 }
@@ -95,7 +95,7 @@ func (p *BaseContext) LoadConfig(v interface{}) bool {
 		} else if IsFile(jsonFile) {
 			p.config = jsonFile
 		} else {
-			p.LogErrorf(
+			p.LogError(
 				"could not found main.yaml or main.yml or main.json "+
 					"in directory \"%s\"\n",
 				p.config,
@@ -114,7 +114,7 @@ func (p *BaseContext) LoadConfig(v interface{}) bool {
 	case ".yaml":
 		fnUnmarshal = yaml.Unmarshal
 	default:
-		p.LogErrorf("unsupported file extension \"%s\"", p.config)
+		p.LogError("unsupported file extension \"%s\"", p.config)
 		return false
 	}
 
@@ -183,27 +183,19 @@ func (p *BaseContext) GetUserInput(desc string, mode string) (string, bool) {
 	return ret, e == nil
 }
 
-func (p *BaseContext) LogRawInfo(v string) {
-	log(v, color.FgBlue)
+func (p *BaseContext) LogRawInfo(format string, a ...interface{}) {
+	log(fmt.Sprintf(format, a...), "", color.FgBlue)
 }
 
-func (p *BaseContext) LogRawError(v string) {
-	log(v, color.FgRed)
+func (p *BaseContext) LogRawError(format string, a ...interface{}) {
+	log(fmt.Sprintf(format, a...), "", color.FgRed)
 }
 
-func (p *BaseContext) LogInfo(v string) {
-	p.Log(v, "")
-}
-
-func (p *BaseContext) LogInfof(format string, a ...interface{}) {
+func (p *BaseContext) LogInfo(format string, a ...interface{}) {
 	p.Log(fmt.Sprintf(format, a...), "")
 }
 
-func (p *BaseContext) LogError(v string) {
-	p.Log("", v)
-}
-
-func (p *BaseContext) LogErrorf(format string, a ...interface{}) {
+func (p *BaseContext) LogError(format string, a ...interface{}) {
 	p.Log("", fmt.Sprintf(format, a...))
 }
 
