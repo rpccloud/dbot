@@ -173,8 +173,8 @@ func (p *RootContext) load() bool {
 
 	// Load imports
 	for key, it := range p.rootConfig.Imports {
-		name := Env{}.ParseString(it.Name, "", true)
-		config := Env{}.ParseString(it.Config, "", true)
+		name := strings.TrimSpace(it.Name)
+		config := strings.TrimSpace(it.Config)
 		ctx := p.Clone("imports.%s", key).
 			GetRootContext().
 			newImportContext(name, config)
@@ -193,8 +193,7 @@ func (p *RootContext) load() bool {
 	// Load remotes
 	for key, sshGroup := range p.rootConfig.Remotes {
 		if len(sshGroup) == 0 {
-			p.Clone("imports.%s", key).
-				LogError("SSHGroup \"%s\" is empty", key)
+			p.Clone("imports.%s", key).LogError("SSHGroup \"%s\" is empty", key)
 			return false
 		} else if !loadSSHGroup(p.Clone("remotes.%s", key), key, sshGroup) {
 			return false
@@ -210,7 +209,7 @@ func (p *RootContext) load() bool {
 		// Get task
 		task, ok := p.rootConfig.Tasks[taskName]
 		if !ok {
-			p.Clone("main[%d]", idx).LogError("task \"%s\"")
+			p.Clone("main[%d]", idx).LogError("task \"%s\" not found")
 			return false
 		}
 
