@@ -18,7 +18,7 @@ func loadSSHGroup(ctx Context, key string, list []*Remote) bool {
 	runnerGroup := make([]string, 0)
 	for idx, it := range list {
 		host := Env{}.ParseString(it.Host, "", true)
-		user := Env{}.ParseString(it.User, "", true)
+		user := Env{}.ParseString(it.User, os.Getenv("USER"), true)
 		port := Env{}.ParseString(it.Port, "22", true)
 
 		id := fmt.Sprintf("%s@%s:%s", user, host, port)
@@ -34,6 +34,7 @@ func loadSSHGroup(ctx Context, key string, list []*Remote) bool {
 
 			rootContext.runnerMap[id] = ssh
 		}
+
 		runnerGroup = append(runnerGroup, id)
 	}
 
@@ -54,6 +55,7 @@ func NewRootContext(config string) *RootContext {
 		rootConfig:     &RootConfig{},
 		runnerGroupMap: make(map[string][]string),
 		runnerMap:      make(map[string]Runner),
+		runContexts:    make([]*CommandContext, 0),
 		BaseContext: BaseContext{
 			parent: nil,
 			target: fmt.Sprintf("%s@local", os.Getenv("USER")),
@@ -88,6 +90,7 @@ func (p *RootContext) Clone(pathFormat string, a ...interface{}) Context {
 		rootConfig:     p.rootConfig,
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
+		runContexts:    append([]*CommandContext{}, p.runContexts...),
 		BaseContext:    *p.BaseContext.copy(pathFormat, a...),
 	}
 }
@@ -193,7 +196,7 @@ func (p *RootContext) load() bool {
 			p.Clone("imports.%s", key).
 				LogError("SSHGroup \"%s\" is empty", key)
 			return false
-		} else if !loadSSHGroup(p, key, sshGroup) {
+		} else if !loadSSHGroup(p.Clone("remotes.%s", key), key, sshGroup) {
 			return false
 		} else {
 			continue
