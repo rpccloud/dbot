@@ -8,9 +8,7 @@ jobs:
         config: ../ca/main.yml
         exec: createCA
         env: 
-          OutputDir: 
-            value: ${ConfigDir}/../../data/etcd/ca/nodes
-            desc: create ca for etcd nodes
+          OutputDir: ${ConfigDir}/../../data/etcd/ca/nodes
   initEtcdClientCA:
     commands:
       - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
@@ -18,9 +16,7 @@ jobs:
         config: ../ca/main.yml
         exec: createCA
         env: 
-          OutputDir: 
-            value: ${ConfigDir}/../../data/etcd/ca/client
-            desc: create ca for etcd clients
+          OutputDir: ${ConfigDir}/../../data/etcd/ca/client
   install:
     commands:
     - exec: echo "install etcd"

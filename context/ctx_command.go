@@ -1,5 +1,9 @@
 package context
 
+import (
+	"strings"
+)
+
 type CmdContext struct {
 	BaseContext
 }
@@ -10,8 +14,49 @@ func (p *CmdContext) Clone(format string, a ...interface{}) Context {
 	}
 }
 
+func (p *CmdContext) getRunners(runOn string) []Runner {
+	rootContext := p.GetRootContext()
+	if rootContext == nil {
+		p.LogError("kernel error: rootContext is nil")
+		return nil
+	}
+
+	ret := make([]Runner, 0)
+
+	for _, groupName := range strings.Split(runOn, ",") {
+		if groupName = strings.TrimSpace(groupName); groupName != "" {
+			if groupName == "local" {
+				ret = append(ret, rootContext.runnerMap["local"])
+			} else {
+				sshGroup, ok := rootContext.runnerGroupMap[groupName]
+
+				if !ok {
+					p.LogError("could not find SSHGroup \"%s\"", groupName)
+					return nil
+				}
+
+				for _, runnerName := range sshGroup {
+					runner, ok := rootContext.runnerMap[runnerName]
+					if !ok {
+						p.LogError("could not find runner \"%s\"", runnerName)
+						return nil
+					}
+					ret = append(ret, runner)
+				}
+			}
+		}
+	}
+
+	if len(ret) == 0 {
+		p.LogError("could not find any runners")
+		return nil
+	}
+
+	return ret
+}
+
 func (p *CmdContext) newCommandContext(cmd *Command, parseEnv Env) Context {
-	return &CmdContext{
+	ret := &CmdContext{
 		BaseContext: BaseContext{
 			parent:   p,
 			cmd:      cmd,
@@ -21,6 +66,23 @@ func (p *CmdContext) newCommandContext(cmd *Command, parseEnv Env) Context {
 			parseEnv: parseEnv,
 		},
 	}
+
+	// Parse cmd.On
+	cmdOn := ret.ParseCommand().On
+
+	// Use default runners
+	if cmdOn == "" {
+		return ret
+	}
+
+	// Use defined runners
+	runners := p.getRunners(cmdOn)
+	if runners == nil {
+		return nil
+	}
+
+	ret.runners = runners
+	return ret
 }
 
 func (p *CmdContext) Run() bool {

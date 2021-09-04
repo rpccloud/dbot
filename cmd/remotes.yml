@@ -1,8 +1,8 @@
 etcdServers:
   - host: 192.168.1.81
     user: root
-  - host: 192.168.1.82
-    user: root
+  # - host: 192.168.1.82
+  #   user: root
   # - host: 192.168.1.83
   #   user: root
 etcdClient:
