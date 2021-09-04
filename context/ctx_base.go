@@ -34,7 +34,7 @@ type BaseContext struct {
 	env     Env
 }
 
-func (p *BaseContext) copy(pathFormat string, a ...interface{}) *BaseContext {
+func (p *BaseContext) Clone(pathFormat string, a ...interface{}) Context {
 	return &BaseContext{
 		parent:  p.parent,
 		cmd:     p.cmd,
@@ -43,6 +43,10 @@ func (p *BaseContext) copy(pathFormat string, a ...interface{}) *BaseContext {
 		config:  p.config,
 		env:     p.env.Merge(Env{}),
 	}
+}
+
+func (p *BaseContext) Run() bool {
+	return false
 }
 
 func (p *BaseContext) getRunnersName() string {

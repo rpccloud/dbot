@@ -1,33 +1,26 @@
 package context
 
 type ImportContext struct {
-	importConfig map[string][]*Remote
 	BaseContext
 }
 
-func (p *ImportContext) Clone(pathFormat string, a ...interface{}) Context {
-	return &ImportContext{
-		importConfig: p.importConfig,
-		BaseContext:  *p.BaseContext.copy(pathFormat, a...),
-	}
-}
 
 func (p *ImportContext) Run() bool {
-	return p.LoadConfig(&p.importConfig)
+	return true
 }
 
 func (p *ImportContext) GetSSHGroup(name string) []*Remote {
-	ret, ok := p.importConfig[name]
+	config := make(map[string][]*Remote)
 
-	if !ok {
+	if !p.LoadConfig(&config) {
+		return nil
+	} else if ret, ok := config[name]; !ok {
 		p.Clone(name).LogError("SSHGroup \"%s\" not found", name)
 		return nil
-	}
-
-	if len(ret) == 0 {
+	} else if len(ret) == 0 {
 		p.Clone(name).LogError("SSHGroup \"%s\" is empty", name)
 		return nil
+	} else {
+		return ret
 	}
-
-	return ret
 }

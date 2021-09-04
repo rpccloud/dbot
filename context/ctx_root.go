@@ -88,12 +88,13 @@ func NewRootContext(config string) *RootContext {
 }
 
 func (p *RootContext) Clone(pathFormat string, a ...interface{}) Context {
+	// override the BaseContext Clone method
 	return &RootContext{
 		rootConfig:     p.rootConfig,
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
 		runContexts:    append([]*CommandContext{}, p.runContexts...),
-		BaseContext:    *p.BaseContext.copy(pathFormat, a...),
+		BaseContext:    *(p.BaseContext.Clone(pathFormat, a...)).(*BaseContext),
 	}
 }
 
@@ -106,7 +107,6 @@ func (p *RootContext) newImportContext(
 	}
 
 	return &ImportContext{
-		importConfig: make(map[string][]*Remote),
 		BaseContext: BaseContext{
 			parent:  p,
 			cmd:     nil,
@@ -180,9 +180,7 @@ func (p *RootContext) load() bool {
 			GetRootContext().
 			newImportContext(name, config)
 
-		if !ctx.Run() {
-			return false
-		} else if sshGroup := ctx.GetSSHGroup(name); sshGroup == nil {
+		if sshGroup := ctx.GetSSHGroup(name); sshGroup == nil {
 			return false
 		} else if !loadSSHGroup(ctx, key, sshGroup) {
 			return false
