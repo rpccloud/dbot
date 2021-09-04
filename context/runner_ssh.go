@@ -43,6 +43,10 @@ func NewSSHRunner(
 	return ret
 }
 
+func (p *SSHRunner) Name() string {
+	return fmt.Sprintf("%s@%s:%s", p.user, p.host, p.port)
+}
+
 func (p *SSHRunner) Run(ctx Context) bool {
 	return false
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/fatih/color"
@@ -25,23 +26,36 @@ type Context interface {
 }
 
 type BaseContext struct {
-	parent Context
-	target string
-	path   string
-	config string
-	exec   string
-	env    Env
+	parent  Context
+	cmd     *Command
+	runners []Runner
+	path    string
+	config  string
+	env     Env
 }
 
 func (p *BaseContext) copy(pathFormat string, a ...interface{}) *BaseContext {
 	return &BaseContext{
-		parent: p.parent,
-		target: p.target,
-		path:   fmt.Sprintf(pathFormat, a...),
-		config: p.config,
-		exec:   p.exec,
-		env:    p.env.Merge(Env{}),
+		parent:  p.parent,
+		cmd:     p.cmd,
+		runners: append([]Runner{}, p.runners...),
+		path:    fmt.Sprintf(pathFormat, a...),
+		config:  p.config,
+		env:     p.env.Merge(Env{}),
 	}
+}
+
+func (p *BaseContext) getRunnersName() string {
+	nameArray := make([]string, 0)
+	for _, runner := range p.runners {
+		nameArray = append(nameArray, runner.Name())
+	}
+
+	if len(nameArray) == 0 {
+		return ""
+	}
+
+	return strings.Join(nameArray, ",")
 }
 
 func (p *BaseContext) GetParent() Context {
@@ -189,7 +203,7 @@ func (p *BaseContext) LogError(format string, a ...interface{}) {
 func (p *BaseContext) Log(outStr string, errStr string) {
 	logItems := []interface{}{}
 
-	logItems = append(logItems, p.target)
+	logItems = append(logItems, p.getRunnersName())
 	logItems = append(logItems, color.FgYellow)
 
 	logItems = append(logItems, " > ")
@@ -207,8 +221,8 @@ func (p *BaseContext) Log(outStr string, errStr string) {
 	logItems = append(logItems, "\n")
 	logItems = append(logItems, color.FgGreen)
 
-	if p.exec != "" {
-		logItems = append(logItems, GetStandradOut(p.exec))
+	if p.cmd != nil && p.cmd.Type == "cmd" && p.cmd.Exec != "" {
+		logItems = append(logItems, GetStandradOut(p.cmd.Exec))
 		logItems = append(logItems, color.FgBlue)
 	}
 

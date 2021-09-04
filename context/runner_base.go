@@ -57,5 +57,6 @@ func (p *RunnerInput) Read(b []byte) (n int, err error) {
 }
 
 type Runner interface {
+	Name() string
 	Run(ctx Context) bool
 }

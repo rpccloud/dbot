@@ -51,23 +51,25 @@ type RootContext struct {
 }
 
 func NewRootContext(config string) *RootContext {
+	localRUnner := &LocalRunner{}
+
 	ret := &RootContext{
 		rootConfig:     &RootConfig{},
 		runnerGroupMap: make(map[string][]string),
 		runnerMap:      make(map[string]Runner),
 		runContexts:    make([]*CommandContext, 0),
 		BaseContext: BaseContext{
-			parent: nil,
-			target: fmt.Sprintf("%s@local", os.Getenv("USER")),
-			path:   "",
-			config: config,
-			exec:   "",
-			env:    Env{},
+			parent:  nil,
+			cmd:     nil,
+			runners: []Runner{localRUnner},
+			path:    "",
+			config:  config,
+			env:     Env{},
 		},
 	}
 
 	// Add local runner
-	ret.runnerMap["local"] = &LocalRunner{}
+	ret.runnerMap["local"] = localRUnner
 
 	// Make sure the BaseContext.config is an absolute path
 	absConfig, e := filepath.Abs(config)
@@ -106,12 +108,12 @@ func (p *RootContext) newImportContext(
 	return &ImportContext{
 		importConfig: make(map[string][]*Remote),
 		BaseContext: BaseContext{
-			parent: p,
-			target: p.target,
-			path:   path,
-			config: absConfig,
-			exec:   "",
-			env:    Env{},
+			parent:  p,
+			cmd:     nil,
+			runners: append([]Runner{}, p.runners...),
+			path:    path,
+			config:  absConfig,
+			env:     Env{},
 		},
 	}
 }
@@ -125,21 +127,20 @@ func (p *RootContext) newCommandContext(
 	}
 
 	return &CommandContext{
-		cmd: &Command{
-			Type:   "job",
-			Exec:   jobName,
-			On:     "local",
-			Inputs: []string{},
-			Env:    env.Merge(nil),
-			Config: absConfig,
-		},
 		BaseContext: BaseContext{
 			parent: p,
-			target: p.target,
-			path:   "",
-			config: absConfig,
-			exec:   "",
-			env:    Env{},
+			cmd: &Command{
+				Type:   "job",
+				Exec:   jobName,
+				On:     "local",
+				Inputs: []string{},
+				Env:    env.Merge(nil),
+				Config: absConfig,
+			},
+			runners: append([]Runner{}, p.runners...),
+			path:    "",
+			config:  absConfig,
+			env:     Env{},
 		},
 	}
 }

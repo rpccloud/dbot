@@ -1,9 +1,17 @@
 package context
 
-import "sync"
+import (
+	"fmt"
+	"os"
+	"sync"
+)
 
 type LocalRunner struct {
 	sync.Mutex
+}
+
+func (p *LocalRunner) Name() string {
+	return fmt.Sprintf("%s@local", os.Getenv("USER"))
 }
 
 func (p *LocalRunner) Run(ctx Context) bool {
