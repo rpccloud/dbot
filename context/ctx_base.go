@@ -155,6 +155,9 @@ func (p *BaseContext) GetUserInput(desc string, mode string) (string, bool) {
 	var e error = nil
 	var ret string = ""
 
+	// print head
+	p.LogInfo("")
+
 	switch mode {
 	case "password":
 		p.LogRawInfo(desc)

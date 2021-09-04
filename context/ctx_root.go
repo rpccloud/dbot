@@ -92,7 +92,9 @@ func (p *RootContext) Clone(pathFormat string, a ...interface{}) Context {
 	}
 }
 
-func (p *RootContext) newImportContext(config string) *ImportContext {
+func (p *RootContext) newImportContext(
+	path string, config string,
+) *ImportContext {
 	absConfig, ok := p.AbsPath(config)
 	if !ok {
 		return nil
@@ -103,7 +105,7 @@ func (p *RootContext) newImportContext(config string) *ImportContext {
 		BaseContext: BaseContext{
 			parent: p,
 			target: p.target,
-			path:   "",
+			path:   path,
 			config: absConfig,
 			exec:   "",
 			env:    Env{},
@@ -172,7 +174,7 @@ func (p *RootContext) load() bool {
 		config := Env{}.ParseString(it.Config, "", true)
 		ctx := p.Clone("imports.%s", key).
 			GetRootContext().
-			newImportContext(config)
+			newImportContext(name, config)
 
 		if !ctx.Run() {
 			return false
