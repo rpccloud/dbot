@@ -4,6 +4,11 @@ type ImportContext struct {
 	BaseContext
 }
 
+func (p *ImportContext) Clone(format string, a ...interface{}) Context {
+	return &ImportContext{
+		BaseContext: *p.BaseContext.copy(format, a...),
+	}
+}
 
 func (p *ImportContext) Run() bool {
 	return true

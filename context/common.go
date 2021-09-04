@@ -119,9 +119,9 @@ type RootConfig struct {
 }
 
 type Job struct {
-	Concurrency bool
-	Commands    []*Command
-	Env         Env
+	Async    bool
+	Commands []*Command
+	Env      Env
 }
 
 type Command struct {

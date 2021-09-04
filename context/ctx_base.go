@@ -19,6 +19,7 @@ type Context interface {
 	GetParent() Context
 	GetRootContext() *RootContext
 	GetUserInput(desc string, mode string) (string, bool)
+	ParseCommand() *Command
 	LogInfo(format string, a ...interface{})
 	LogError(format string, a ...interface{})
 	Clone(pathFormat string, a ...interface{}) Context
@@ -26,27 +27,23 @@ type Context interface {
 }
 
 type BaseContext struct {
-	parent  Context
-	cmd     *Command
-	runners []Runner
-	path    string
-	config  string
-	env     Env
+	parent   Context
+	cmd      *Command
+	runners  []Runner
+	path     string
+	config   string
+	parseEnv Env
 }
 
-func (p *BaseContext) Clone(pathFormat string, a ...interface{}) Context {
+func (p *BaseContext) copy(pathFormat string, a ...interface{}) *BaseContext {
 	return &BaseContext{
-		parent:  p.parent,
-		cmd:     p.cmd,
-		runners: append([]Runner{}, p.runners...),
-		path:    fmt.Sprintf(pathFormat, a...),
-		config:  p.config,
-		env:     p.env.Merge(Env{}),
+		parent:   p.parent,
+		cmd:      p.cmd,
+		runners:  append([]Runner{}, p.runners...),
+		path:     fmt.Sprintf(pathFormat, a...),
+		config:   p.config,
+		parseEnv: p.parseEnv.Merge(Env{}),
 	}
-}
-
-func (p *BaseContext) Run() bool {
-	return false
 }
 
 func (p *BaseContext) getRunnersName() string {
@@ -152,8 +149,23 @@ func (p *BaseContext) GetRootEnv() Env {
 	})
 }
 
-func (p *BaseContext) GetEnv() Env {
-	return p.env.Merge(nil)
+func (p *BaseContext) ParseCommand() *Command {
+	if p.cmd == nil {
+		p.LogError("kernel error: cmd is nil")
+		return nil
+	}
+
+	cmdEnv := p.parseEnv.ParseEnv(p.cmd.Env)
+	useEnv := p.parseEnv.Merge(cmdEnv)
+
+	return &Command{
+		Type:   p.parseEnv.ParseString(p.cmd.Type, "cmd", true),
+		Exec:   useEnv.ParseString(p.cmd.Exec, "", false),
+		On:     useEnv.ParseString(p.cmd.On, "", true),
+		Inputs: useEnv.ParseStringArray(p.cmd.Inputs),
+		Env:    cmdEnv,
+		Config: useEnv.ParseString(p.cmd.Config, "", true),
+	}
 }
 
 func (p *BaseContext) GetPath() string {

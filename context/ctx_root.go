@@ -46,7 +46,7 @@ type RootContext struct {
 	rootConfig     *RootConfig
 	runnerGroupMap map[string][]string
 	runnerMap      map[string]Runner
-	runContexts    []*CommandContext
+	runContexts    []*CmdContext
 	BaseContext
 }
 
@@ -57,14 +57,14 @@ func NewRootContext(config string) *RootContext {
 		rootConfig:     &RootConfig{},
 		runnerGroupMap: make(map[string][]string),
 		runnerMap:      make(map[string]Runner),
-		runContexts:    make([]*CommandContext, 0),
+		runContexts:    make([]*CmdContext, 0),
 		BaseContext: BaseContext{
-			parent:  nil,
-			cmd:     nil,
-			runners: []Runner{localRUnner},
-			path:    "",
-			config:  config,
-			env:     Env{},
+			parent:   nil,
+			cmd:      nil,
+			runners:  []Runner{localRUnner},
+			path:     "",
+			config:   config,
+			parseEnv: Env{},
 		},
 	}
 
@@ -93,8 +93,8 @@ func (p *RootContext) Clone(pathFormat string, a ...interface{}) Context {
 		rootConfig:     p.rootConfig,
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
-		runContexts:    append([]*CommandContext{}, p.runContexts...),
-		BaseContext:    *(p.BaseContext.Clone(pathFormat, a...)).(*BaseContext),
+		runContexts:    append([]*CmdContext{}, p.runContexts...),
+		BaseContext:    *p.BaseContext.copy(pathFormat, a...),
 	}
 }
 
@@ -108,25 +108,25 @@ func (p *RootContext) newImportContext(
 
 	return &ImportContext{
 		BaseContext: BaseContext{
-			parent:  p,
-			cmd:     nil,
-			runners: append([]Runner{}, p.runners...),
-			path:    path,
-			config:  absConfig,
-			env:     Env{},
+			parent:   p,
+			cmd:      nil,
+			runners:  append([]Runner{}, p.runners...),
+			path:     path,
+			config:   absConfig,
+			parseEnv: Env{},
 		},
 	}
 }
 
 func (p *RootContext) newCommandContext(
 	config string, jobName string, env Env,
-) *CommandContext {
+) *CmdContext {
 	absConfig, ok := p.AbsPath(config)
 	if !ok {
 		return nil
 	}
 
-	return &CommandContext{
+	return &CmdContext{
 		BaseContext: BaseContext{
 			parent: p,
 			cmd: &Command{
@@ -137,10 +137,10 @@ func (p *RootContext) newCommandContext(
 				Env:    env.Merge(nil),
 				Config: absConfig,
 			},
-			runners: append([]Runner{}, p.runners...),
-			path:    "",
-			config:  absConfig,
-			env:     Env{},
+			runners:  append([]Runner{}, p.runners...),
+			path:     "",
+			config:   absConfig,
+			parseEnv: Env{},
 		},
 	}
 }
