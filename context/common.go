@@ -138,7 +138,7 @@ type JobConfig struct {
 	Jobs map[string]*Job
 }
 
-func getStandradOut(s string) string {
+func GetStandradOut(s string) string {
 	if s != "" && s[len(s)-1] != '\n' {
 		return s + "\n"
 	} else {

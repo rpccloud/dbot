@@ -1,5 +1,7 @@
 package context
 
+import "fmt"
+
 type CommandContext struct {
 	cmd *Command
 	BaseContext
@@ -13,5 +15,6 @@ func (p *CommandContext) Clone(pathFormat string, a ...interface{}) Context {
 }
 
 func (p *CommandContext) Run() bool {
+	fmt.Println(p.cmd)
 	return false
 }

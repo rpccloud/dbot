@@ -209,17 +209,17 @@ func (p *BaseContext) Log(outStr string, errStr string) {
 	logItems = append(logItems, color.FgGreen)
 
 	if p.exec != "" {
-		logItems = append(logItems, getStandradOut(p.exec))
+		logItems = append(logItems, GetStandradOut(p.exec))
 		logItems = append(logItems, color.FgBlue)
 	}
 
 	if outStr != "" {
-		logItems = append(logItems, getStandradOut(outStr))
+		logItems = append(logItems, GetStandradOut(outStr))
 		logItems = append(logItems, color.FgGreen)
 	}
 
 	if errStr != "" {
-		logItems = append(logItems, getStandradOut(errStr))
+		logItems = append(logItems, GetStandradOut(errStr))
 		logItems = append(logItems, color.FgRed)
 	}
 
