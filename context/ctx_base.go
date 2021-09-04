@@ -91,7 +91,7 @@ func (p *BaseContext) LoadConfig(v interface{}) bool {
 			p.config = jsonFile
 		} else {
 			p.LogError(
-				"could not found main.yaml or main.yml or main.json "+
+				"could not find main.yaml or main.yml or main.json "+
 					"in directory \"%s\"\n",
 				p.config,
 			)

@@ -138,7 +138,7 @@ func (p *RootContext) newCommandContext(
 			target: p.target,
 			path:   "",
 			config: absConfig,
-			exec:   jobName,
+			exec:   "",
 			env:    Env{},
 		},
 	}
@@ -147,7 +147,7 @@ func (p *RootContext) newCommandContext(
 func (p *RootContext) Run() bool {
 	// Check
 	if len(p.runContexts) == 0 {
-		p.Clone("main").LogError("could not found valid task")
+		p.Clone("main").LogError("could not find any tasks")
 		return false
 	}
 
