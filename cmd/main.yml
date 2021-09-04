@@ -1,17 +1,17 @@
 ---
 name: dbot entry
+remotes: 
+  EtcdClient:
+    - host: 192.168.1.81
+      user: root
+imports:
+  EtcdServers: 
+    config: ./remotes.yml
+    name: etcdServers
 tasks:
   installEtcd:
     env: 
       EtcdName: "name"
-    remotes: 
-      EtcdClient:
-        - host: 192.168.1.81
-          user: root
-    imports:
-      EtcdServers: 
-        config: ./remotes.yml
-        name: etcdServers
     # inputs: 
     #   EtcdName: 
     #     type: text

@@ -263,12 +263,18 @@ func (p *TaskRunner) Prepare(ctx *XContext) bool {
 }
 
 func (p *TaskRunner) Run(ctx *XContext) bool {
-	// taskName := ctx.GetEnv().ParseString(ctx.cmd.Exec, "", true)
+	// configPath, ok := ctx.Clone().
+	// 	SetCurrentf("%s.config", ctx.current).
+	// 	AbsPath(ctx.GetContextEnv().ParseString(ctx.task.Config, "", true))
 
-	// taskPath, ok := ctx.Clone().
-	// 	SetCurrentf("%s.imports.%s", ctx.current).
-	// 	AbsPath(ctx.GetEnv().ParseString(ctx.cmd.Config, "", true))
-	// fmt.Println("Run Task ", ctx.cmd)
+	// if !ok {
+	// 	return false
+	// }
+
+	// run := ctx.GetContextEnv().ParseString(ctx.task.Run, "", true)
+
+	// ctx.CreateLoa
+
 	return false
 }
 

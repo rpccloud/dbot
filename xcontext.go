@@ -76,7 +76,7 @@ func (p *XContext) CreateTaskContext(name string, env Env) *XContext {
 			Exec:   name,
 			On:     "local",
 			Inputs: nil,
-			Env:    nil,
+			Env:    Env{},
 			Config: p.cmd.Config,
 		},
 		runner: &TaskRunner{},
