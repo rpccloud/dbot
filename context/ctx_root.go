@@ -212,11 +212,10 @@ func (p *RootContext) load() bool {
 		}
 
 		// Load task env
-		taskEnv := p.RootEnv().ParseEnv(task.Env)
-		contextEnv := p.RootEnv().Merge(taskEnv)
+		taskEnv := p.GetRootEnv().ParseEnv(task.Env)
+		contextEnv := p.GetRootEnv().Merge(taskEnv)
 		for key, it := range task.Inputs {
 			ctx := p.Clone("tasks.%s.inputs.%s", taskName, key)
-			ctx.LogInfo("")
 			itDesc := contextEnv.ParseString(it.Desc, "input "+key+": ", false)
 			itType := contextEnv.ParseString(it.Type, "text", true)
 			value, ok := ctx.GetUserInput(itDesc, itType)
@@ -225,7 +224,7 @@ func (p *RootContext) load() bool {
 			}
 			taskEnv[key] = contextEnv.ParseString(value, "", false)
 		}
-		contextEnv = p.RootEnv().Merge(taskEnv)
+		contextEnv = p.GetRootEnv().Merge(taskEnv)
 
 		// Create a job command context, and add it to the run list
 		p.runContexts = append(

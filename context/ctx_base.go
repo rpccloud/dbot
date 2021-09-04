@@ -21,7 +21,7 @@ type Context interface {
 	LogInfo(format string, a ...interface{})
 	LogError(format string, a ...interface{})
 	Clone(pathFormat string, a ...interface{}) Context
-	RootEnv() Env
+	GetRootEnv() Env
 }
 
 type BaseContext struct {
@@ -31,6 +31,17 @@ type BaseContext struct {
 	config string
 	exec   string
 	env    Env
+}
+
+func (p *BaseContext) copy(pathFormat string, a ...interface{}) *BaseContext {
+	return &BaseContext{
+		parent: p.parent,
+		target: p.target,
+		path:   fmt.Sprintf(pathFormat, a...),
+		config: p.config,
+		exec:   p.exec,
+		env:    p.env.Merge(Env{}),
+	}
 }
 
 func (p *BaseContext) GetParent() Context {
@@ -44,28 +55,12 @@ func (p *BaseContext) GetRootContext() *RootContext {
 		v = v.GetParent()
 	}
 
-	if v != nil {
-		if ret, ok := v.(*RootContext); ok {
-			return ret
-		}
-	}
-
-	return nil
-}
-
-func (p *BaseContext) copy(pathFormat string, a ...interface{}) *BaseContext {
-	return &BaseContext{
-		parent: p.parent,
-		target: p.target,
-		path:   fmt.Sprintf(pathFormat, a...),
-		config: p.config,
-		exec:   p.exec,
-		env:    p.env.Merge(nil),
-	}
+	return v.(*RootContext)
 }
 
 func (p *BaseContext) AbsPath(path string) (string, bool) {
 	if absPath, e := filepath.Abs(path); e != nil {
+		p.LogError(e.Error())
 		return "", false
 	} else if absPath == path {
 		return path, true
@@ -130,7 +125,7 @@ func (p *BaseContext) LoadConfig(v interface{}) bool {
 	}
 }
 
-func (p *BaseContext) RootEnv() Env {
+func (p *BaseContext) GetRootEnv() Env {
 	return Env{
 		"KeyESC":   "\033",
 		"KeyEnter": "\n",
@@ -143,52 +138,44 @@ func (p *BaseContext) GetEnv() Env {
 	return p.env.Merge(nil)
 }
 
-func (p *BaseContext) SetEnv(env Env) {
-	p.env = env.Merge(nil)
-}
-
 func (p *BaseContext) GetPath() string {
 	return p.path
 }
 
 func (p *BaseContext) GetUserInput(desc string, mode string) (string, bool) {
-	var e error = nil
-	var ret string = ""
-
-	// print head
-	p.LogInfo("")
-
 	switch mode {
 	case "password":
+		p.LogInfo("")
 		p.LogRawInfo(desc)
-		if b, err := term.ReadPassword(int(syscall.Stdin)); err != nil {
-			e = err
-		} else {
-			ret = string(b)
+		b, e := term.ReadPassword(int(syscall.Stdin))
+		if e != nil {
+			p.LogRawError(e.Error() + "\n")
+			return "", false
 		}
+
 		p.LogRawInfo("\n")
+		return string(b), true
 	case "text":
+		p.LogInfo("")
 		p.LogRawInfo(desc)
-		if _, err := fmt.Scanf("%s", &ret); err != nil {
-			e = err
+		ret := ""
+		if _, e := fmt.Scanf("%s", &ret); e != nil {
+			p.LogRawError(e.Error() + "\n")
+			return "", false
 		}
+		return ret, true
 	default:
-		e = fmt.Errorf("unsupported mode %s", mode)
+		p.LogError("unsupported mode %s", mode)
+		return "", false
 	}
-
-	if e != nil {
-		p.LogRawError(e.Error() + "\n")
-	}
-
-	return ret, e == nil
 }
 
 func (p *BaseContext) LogRawInfo(format string, a ...interface{}) {
-	log(fmt.Sprintf(format, a...), "", color.FgBlue)
+	log(fmt.Sprintf(format, a...), color.FgBlue)
 }
 
 func (p *BaseContext) LogRawError(format string, a ...interface{}) {
-	log(fmt.Sprintf(format, a...), "", color.FgRed)
+	log(fmt.Sprintf(format, a...), color.FgRed)
 }
 
 func (p *BaseContext) LogInfo(format string, a ...interface{}) {
@@ -206,14 +193,14 @@ func (p *BaseContext) Log(outStr string, errStr string) {
 	logItems = append(logItems, color.FgYellow)
 
 	logItems = append(logItems, " > ")
-	logItems = append(logItems, color.FgCyan)
+	logItems = append(logItems, color.FgGreen)
 
 	logItems = append(logItems, p.config)
 	logItems = append(logItems, color.FgYellow)
 
 	if p.path != "" {
 		logItems = append(logItems, " > ")
-		logItems = append(logItems, color.FgCyan)
+		logItems = append(logItems, color.FgGreen)
 		logItems = append(logItems, p.path)
 		logItems = append(logItems, color.FgYellow)
 	}

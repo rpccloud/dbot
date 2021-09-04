@@ -12,10 +12,10 @@ tasks:
   installEtcd:
     env: 
       EtcdName: "name"
-    # inputs: 
-    #   EtcdName: 
-    #     type: text
-    #     desc: "Input etcd cluster name: "
+    inputs: 
+      EtcdName: 
+        type: text
+        desc: "Input etcd cluster name: "
     #   EtcdPassword:
     #     type: password
     #     desc: "Input etcd password: "
