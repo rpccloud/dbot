@@ -1,8 +1,10 @@
 package context
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"sync"
 )
 
@@ -15,51 +17,29 @@ func (p *LocalRunner) Name() string {
 }
 
 func (p *LocalRunner) Run(ctx Context) bool {
-	return false
+	p.Lock()
+	defer p.Unlock()
+
+	// Parse command
+	cmd := ctx.ParseCommand()
+	if cmd == nil {
+		return false
+	}
+
+	// Split command and check
+	cmdArray := SplitCommand(cmd.Exec)
+	if len(cmdArray) == 1 {
+		ctx.LogError("the command is empty")
+		return false
+	}
+
+	// Make exec command
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	execCommand := exec.Command(cmdArray[0], cmdArray[1:]...)
+	execCommand.Stdin = NewRunnerInput(cmd.Inputs, nil)
+	execCommand.Stdout = stdout
+	execCommand.Stderr = stderr
+
+	return reportRunnerResult(ctx, execCommand.Run(), stdout, stderr)
 }
-
-// func (p *LocalRunner) RunCommand(
-// 	jobName string,
-// 	command string,
-// 	inputs []string,
-// ) bool {
-// 	p.Lock()
-// 	defer p.Unlock()
-
-// 	head := p.Name() + " > " + jobName + ": "
-// 	cmdArray := ParseCommand(command)
-
-// 	var cmd *exec.Cmd
-// 	if len(cmdArray) == 1 {
-// 		cmd = exec.Command(cmdArray[0])
-// 	} else if len(cmdArray) > 1 {
-// 		cmd = exec.Command(cmdArray[0], cmdArray[1:]...)
-// 	} else {
-// 		LogCommand(head, command, "", "the command is empty")
-// 		return false
-// 	}
-
-// 	stdout := &bytes.Buffer{}
-// 	stderr := &bytes.Buffer{}
-// 	cmd.Stdin = NewRunnerInput(inputs, nil)
-// 	cmd.Stdout = stdout
-// 	cmd.Stderr = stderr
-// 	e := cmd.Run()
-
-// 	outString := ""
-// 	errString := ""
-// 	if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
-// 		outString += s
-// 	}
-
-// 	if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
-// 		errString += s
-// 	}
-
-// 	if e != nil {
-// 		errString += getStandradOut(e.Error())
-// 	}
-
-// 	LogCommand(head, command, outString, errString)
-// 	return e == nil
-// }

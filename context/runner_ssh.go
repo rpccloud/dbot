@@ -1,6 +1,7 @@
 package context
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -48,56 +49,33 @@ func (p *SSHRunner) Name() string {
 }
 
 func (p *SSHRunner) Run(ctx Context) bool {
-	return false
+	p.Lock()
+	defer p.Unlock()
+
+	// Parse command
+	cmd := ctx.ParseCommand()
+	if cmd == nil {
+		return false
+	}
+
+	if client := p.getClient(ctx); client == nil {
+		return false
+	} else if session, e := client.NewSession(); e != nil {
+		_ = client.Close()
+		ctx.LogError(e.Error())
+		return false
+	} else {
+		// Make exec command
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+
+		session.Stdin = NewRunnerInput(cmd.Inputs, nil)
+		session.Stdout = stdout
+		session.Stderr = stderr
+
+		return reportRunnerResult(ctx, session.Run(cmd.Exec), stdout, stderr)
+	}
 }
-
-// func (p *SSHRunner) RunCommand(
-// 	jobName string,
-// 	command string,
-// 	inputs []string,
-// ) bool {
-// 	p.Lock()
-// 	defer p.Unlock()
-
-// 	head := p.Name() + " > " + jobName + ": "
-
-// 	if client, e := p.getClient(SSHAuthIdle); e != nil {
-// 		LogError(head, e.Error())
-// 		return false
-// 	} else if session, e := client.NewSession(); e != nil {
-// 		_ = client.Close()
-// 		LogError(head, e.Error())
-// 		return false
-// 	} else {
-// 		defer func() {
-// 			_ = session.Close()
-// 			_ = client.Close()
-// 		}()
-
-// 		stdout := &bytes.Buffer{}
-// 		stderr := &bytes.Buffer{}
-// 		session.Stdin = NewRunnerInput(inputs, nil)
-// 		session.Stdout = stdout
-// 		session.Stderr = stderr
-// 		e = session.Run(command)
-// 		outString := ""
-// 		errString := ""
-// 		if s := getStandradOut(stdout.String()); !FilterString(s, outFilter) {
-// 			outString += s
-// 		}
-
-// 		if s := getStandradOut(stderr.String()); !FilterString(s, errFilter) {
-// 			errString += s
-// 		}
-
-// 		if e != nil {
-// 			errString += getStandradOut(e.Error())
-// 		}
-
-// 		LogCommand(head, command, outString, errString)
-// 		return e == nil
-// 	}
-// }
 
 func (p *SSHRunner) getClient(ctx Context) *ssh.Client {
 	fnGetPassworldConfig := func(password string) *ssh.ClientConfig {

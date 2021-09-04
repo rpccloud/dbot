@@ -8,14 +8,7 @@ import (
 	"github.com/fatih/color"
 )
 
-// var outFilter = []string{
-// 	"\033",
-// }
 
-// var errFilter = []string{
-// 	"Output is not to a terminal",
-// 	"Input is not from a terminal",
-// }
 
 var gLogLock sync.Mutex
 
@@ -166,7 +159,7 @@ func FilterString(str string, filter []string) bool {
 	return false
 }
 
-func ParseCommand(str string) []string {
+func SplitCommand(str string) []string {
 	command := " " + str + " "
 	ret := make([]string, 0)
 	isSingleQuote := false

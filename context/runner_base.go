@@ -1,11 +1,44 @@
 package context
 
 import (
+	"bytes"
 	"io"
 	"strings"
 	"sync"
 	"time"
 )
+
+var outFilter = []string{
+	"\033",
+}
+
+var errFilter = []string{
+	"Output is not to a terminal",
+	"Input is not from a terminal",
+}
+
+func reportRunnerResult(
+	ctx Context, e error, out *bytes.Buffer, err *bytes.Buffer,
+) (canContinue bool) {
+	outString := ""
+	errString := ""
+	if s := out.String(); !FilterString(s, outFilter) {
+		outString += s
+	}
+
+	if s := err.String(); !FilterString(s, errFilter) {
+		errString += s
+	}
+
+	ctx.Log(outString, errString)
+
+	if e != nil {
+		ctx.LogError(e.Error())
+		return false
+	}
+
+	return true
+}
 
 type RunnerInput struct {
 	delay  time.Duration

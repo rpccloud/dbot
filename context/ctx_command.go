@@ -117,5 +117,5 @@ func (p *CmdContext) runScript() bool {
 }
 
 func (p *CmdContext) runCmd() bool {
-	return false
+	return p.runners[0].Run(p)
 }

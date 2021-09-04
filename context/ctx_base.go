@@ -22,6 +22,7 @@ type Context interface {
 	ParseCommand() *Command
 	LogInfo(format string, a ...interface{})
 	LogError(format string, a ...interface{})
+	Log(outStr string, errStr string)
 	Clone(pathFormat string, a ...interface{}) Context
 	GetRootEnv() Env
 }
