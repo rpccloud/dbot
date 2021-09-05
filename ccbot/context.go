@@ -226,6 +226,15 @@ func (p *Context) Run() bool {
 	}
 }
 
+func (p *Context) getRootEnv() Env {
+	return Env{
+		"KeyESC":   "\033",
+		"KeyEnter": "\n",
+	}.Merge(Env{
+		"ConfigDir": filepath.Dir(p.file),
+	})
+}
+
 func (p *Context) runJob() bool {
 	// Get job
 	job, ok := p.config[p.runCmd.Exec]
@@ -236,12 +245,7 @@ func (p *Context) runJob() bool {
 	}
 
 	// Make jobEnv
-	rootEnv := Env{
-		"KeyESC":   "\033",
-		"KeyEnter": "\n",
-	}.Merge(Env{
-		"ConfigDir": filepath.Dir(p.file),
-	})
+	rootEnv := p.getRootEnv()
 	jobEnv := rootEnv.Merge(rootEnv.ParseEnv(job.Env)).Merge(p.runCmd.Env)
 
 	// If the commands are run in sequence, run them one by one and return
@@ -394,21 +398,21 @@ func (p *Context) GetUserInput(desc string, mode string) (string, bool) {
 	switch mode {
 	case "password":
 		p.LogInfo("")
-		p.LogRawInfo(desc)
+		p.logRawInfo(desc)
 		b, e := term.ReadPassword(int(syscall.Stdin))
 		if e != nil {
-			p.LogRawError(e.Error() + "\n")
+			p.logRawError(e.Error() + "\n")
 			return "", false
 		}
 
-		p.LogRawInfo("\n")
+		p.logRawInfo("\n")
 		return string(b), true
 	case "text":
 		p.LogInfo("")
-		p.LogRawInfo(desc)
+		p.logRawInfo(desc)
 		ret := ""
 		if _, e := fmt.Scanf("%s", &ret); e != nil {
-			p.LogRawError(e.Error() + "\n")
+			p.logRawError(e.Error() + "\n")
 			return "", false
 		}
 		return ret, true
@@ -418,11 +422,11 @@ func (p *Context) GetUserInput(desc string, mode string) (string, bool) {
 	}
 }
 
-func (p *Context) LogRawInfo(format string, a ...interface{}) {
+func (p *Context) logRawInfo(format string, a ...interface{}) {
 	log(fmt.Sprintf(format, a...), color.FgBlue)
 }
 
-func (p *Context) LogRawError(format string, a ...interface{}) {
+func (p *Context) logRawError(format string, a ...interface{}) {
 	log(fmt.Sprintf(format, a...), color.FgRed)
 }
 
