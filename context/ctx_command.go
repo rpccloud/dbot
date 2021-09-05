@@ -93,9 +93,11 @@ func (p *CmdContext) Run() bool {
 	}
 
 	if len(p.runners) == 0 {
+		// Check
 		p.Clone("kernel error: runners must be checked in previous call")
 		return false
 	} else if len(p.runners) == 1 {
+		// If len(p.runners) == 1. Run it
 		switch cmd.Type {
 		case "job":
 			return p.runJob()
@@ -108,6 +110,7 @@ func (p *CmdContext) Run() bool {
 			return false
 		}
 	} else {
+		// If len(p.runners) > 1, Split the context by runners.
 		for _, runner := range p.runners {
 			ctx := p.Clone(p.GetPath()).(*CmdContext)
 			ctx.runners = []Runner{runner}
