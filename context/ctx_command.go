@@ -86,11 +86,17 @@ func (p *CmdContext) newCommandContext(cmd *Command, parseEnv Env) Context {
 }
 
 func (p *CmdContext) Run() bool {
+	// Parse command
+	cmd := p.ParseCommand()
+	if cmd == nil {
+		return false
+	}
+
 	if len(p.runners) == 0 {
 		p.Clone("kernel error: runners must be checked in previous call")
 		return false
 	} else if len(p.runners) == 1 {
-		switch p.cmd.Type {
+		switch cmd.Type {
 		case "job":
 			return p.runJob()
 		case "cmd":
