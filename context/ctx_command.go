@@ -55,7 +55,7 @@ func (p *CmdContext) getRunners(runOn string) []Runner {
 	return ret
 }
 
-func (p *CmdContext) newCommandContext(cmd *Command, parseEnv Env) Context {
+func (p *CmdContext) newJobCommandContext(cmd *Command, parseEnv Env) Context {
 	ret := &CmdContext{
 		BaseContext: BaseContext{
 			parent:   p,
@@ -162,7 +162,7 @@ func (p *CmdContext) runJob() bool {
 	if !job.Async {
 		for i := 0; i < len(job.Commands); i++ {
 			ctx := p.Clone("jobs.%s.commands[%d]", cmd.Exec, i).(*CmdContext).
-				newCommandContext(job.Commands[i], jobEnv)
+				newJobCommandContext(job.Commands[i], jobEnv)
 			if !ctx.Run() {
 				return false
 			}
@@ -177,7 +177,7 @@ func (p *CmdContext) runJob() bool {
 	for i := 0; i < len(job.Commands); i++ {
 		go func(idx int) {
 			ctx := p.Clone("jobs.%s.commands[%d]", cmd.Exec, idx).(*CmdContext).
-				newCommandContext(job.Commands[idx], jobEnv)
+				newJobCommandContext(job.Commands[idx], jobEnv)
 			waitCH <- ctx.Run()
 		}(i)
 	}
