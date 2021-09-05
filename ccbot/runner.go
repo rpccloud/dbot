@@ -123,14 +123,8 @@ func (p *LocalRunner) Run(ctx *Context) bool {
 	p.Lock()
 	defer p.Unlock()
 
-	// Parse command
-	cmd := ctx.ParseCommand()
-	if cmd == nil {
-		return false
-	}
-
 	// Split command and check
-	cmdArray := SplitCommand(cmd.Exec)
+	cmdArray := SplitCommand(ctx.runCmd.Exec)
 	if len(cmdArray) == 1 {
 		ctx.LogError("the command is empty")
 		return false
@@ -140,7 +134,7 @@ func (p *LocalRunner) Run(ctx *Context) bool {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	execCommand := exec.Command(cmdArray[0], cmdArray[1:]...)
-	execCommand.Stdin = NewRunnerInput(cmd.Stdin, nil)
+	execCommand.Stdin = NewRunnerInput(ctx.runCmd.Stdin, nil)
 	execCommand.Stdout = stdout
 	execCommand.Stderr = stderr
 
@@ -188,12 +182,6 @@ func (p *SSHRunner) Run(ctx *Context) bool {
 	p.Lock()
 	defer p.Unlock()
 
-	// Parse command
-	cmd := ctx.ParseCommand()
-	if cmd == nil {
-		return false
-	}
-
 	if client := p.getClient(ctx); client == nil {
 		return false
 	} else if session, e := client.NewSession(); e != nil {
@@ -205,11 +193,13 @@ func (p *SSHRunner) Run(ctx *Context) bool {
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
 
-		session.Stdin = NewRunnerInput(cmd.Stdin, nil)
+		session.Stdin = NewRunnerInput(ctx.runCmd.Stdin, nil)
 		session.Stdout = stdout
 		session.Stderr = stderr
 
-		return reportRunnerResult(ctx, session.Run(cmd.Exec), stdout, stderr)
+		return reportRunnerResult(
+			ctx, session.Run(ctx.runCmd.Exec), stdout, stderr,
+		)
 	}
 }
 

@@ -42,7 +42,7 @@ func NewContext(file string, jobName string) *Context {
 		return nil
 	}
 
-	absFile, ok := vCtx.AbsPath(file)
+	absFile, ok := vCtx.absPath(file)
 	if !ok {
 		return nil
 	}
@@ -60,7 +60,7 @@ func NewContext(file string, jobName string) *Context {
 }
 
 func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
-	runCmd := (&Context{rawCmd: rawCmd, upEnv: upEnv}).ParseCommand()
+	runCmd := (&Context{rawCmd: rawCmd, upEnv: upEnv}).parseCommand()
 	file := p.file
 	runners := p.runners
 	path := p.path
@@ -94,10 +94,10 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 		// Set file and load config
 		if runCmd.File == "" {
 			config = p.config
-		} else if absFile, ok := p.AbsPath(runCmd.File); !ok {
+		} else if absFile, ok := p.absPath(runCmd.File); !ok {
 			return nil
 		} else if retFile, ok := p.Clone("%s.file", p.path).
-			LoadConfig(absFile, &config); !ok {
+			loadConfig(absFile, &config); !ok {
 			return nil
 		} else {
 			file = retFile
@@ -138,19 +138,13 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 	}
 }
 
-func (p *Context) Clone(format string, a ...interface{}) *Context {
-	return &Context{
-		runnerGroupMap: p.runnerGroupMap,
-		runnerMap:      p.runnerMap,
-		config:         p.config,
-		parent:         p.parent,
-		rawCmd:         p.rawCmd,
-		runCmd:         p.runCmd,
-		runners:        p.runners,
-		path:           fmt.Sprintf(format, a...),
-		file:           p.file,
-		upEnv:          p.upEnv,
-	}
+func (p *Context) getRootEnv() Env {
+	return Env{
+		"KeyESC":   "\033",
+		"KeyEnter": "\n",
+	}.Merge(Env{
+		"ConfigDir": filepath.Dir(p.file),
+	})
 }
 
 func (p *Context) getRunnersNameByRunnerGroup(groupName string) []string {
@@ -194,6 +188,21 @@ func (p *Context) getRunners(runOn string) []Runner {
 	return ret
 }
 
+func (p *Context) Clone(format string, a ...interface{}) *Context {
+	return &Context{
+		runnerGroupMap: p.runnerGroupMap,
+		runnerMap:      p.runnerMap,
+		config:         p.config,
+		parent:         p.parent,
+		rawCmd:         p.rawCmd,
+		runCmd:         p.runCmd,
+		runners:        p.runners,
+		path:           fmt.Sprintf(format, a...),
+		file:           p.file,
+		upEnv:          p.upEnv,
+	}
+}
+
 func (p *Context) Run() bool {
 	if len(p.runners) == 0 {
 		// Check
@@ -224,15 +233,6 @@ func (p *Context) Run() bool {
 
 		return true
 	}
-}
-
-func (p *Context) getRootEnv() Env {
-	return Env{
-		"KeyESC":   "\033",
-		"KeyEnter": "\n",
-	}.Merge(Env{
-		"ConfigDir": filepath.Dir(p.file),
-	})
 }
 
 func (p *Context) runJob() bool {
@@ -309,7 +309,7 @@ func (p *Context) getRunnersName() string {
 	return strings.Join(nameArray, ",")
 }
 
-func (p *Context) AbsPath(path string) (string, bool) {
+func (p *Context) absPath(path string) (string, bool) {
 	dir := p.file
 	if IsFile(p.file) {
 		dir = filepath.Dir(p.file)
@@ -327,7 +327,7 @@ func (p *Context) AbsPath(path string) (string, bool) {
 	}
 }
 
-func (p *Context) LoadConfig(absPath string, v interface{}) (string, bool) {
+func (p *Context) loadConfig(absPath string, v interface{}) (string, bool) {
 	var fnUnmarshal (func(data []byte, v interface{}) error)
 	ret := absPath
 
@@ -379,7 +379,7 @@ func (p *Context) LoadConfig(absPath string, v interface{}) (string, bool) {
 	}
 }
 
-func (p *Context) ParseCommand() *Command {
+func (p *Context) parseCommand() *Command {
 	cmdEnv := p.upEnv.ParseEnv(p.rawCmd.Env)
 	useEnv := p.upEnv.Merge(cmdEnv)
 
