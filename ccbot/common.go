@@ -134,16 +134,6 @@ func IsFile(path string) bool {
 	return e == nil && f.Mode().IsRegular()
 }
 
-func FilterString(str string, filter []string) bool {
-	for _, v := range filter {
-		if strings.Contains(str, v) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func SplitCommand(str string) []string {
 	command := " " + str + " "
 	ret := make([]string, 0)
