@@ -1,9 +1,10 @@
-package context
+package ccbot
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -13,30 +14,146 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type CmdContext struct {
+type Context struct {
 	runnerGroupMap map[string][]string
 	runnerMap      map[string]Runner
-
-	parent   *CmdContext
-	cmd      *Command
-	runners  []Runner
-	path     string
-	config   string
-	parseEnv Env
+	parent         *Context
+	rawCmd         *Command
+	runCmd         *Command
+	runners        []Runner
+	config         Config
+	path           string
+	file           string
+	upEnv          Env
 }
 
-func (p *CmdContext) Clone(format string, a ...interface{}) *CmdContext {
-	return &CmdContext{
-		parent:   p.parent,
-		cmd:      p.cmd,
-		runners:  append([]Runner{}, p.runners...),
-		path:     fmt.Sprintf(format, a...),
-		config:   p.config,
-		parseEnv: p.parseEnv.Merge(Env{}),
+func NewContext(file string, jobName string) *Context {
+	vCtx := &Context{
+		runnerMap: make(map[string]Runner),
+		path:      "dbot.init",
+		file:      "",
+		runners:   []Runner{&LocalRunner{}},
+	}
+
+	if currentDir, e := os.Getwd(); e == nil {
+		vCtx.file = currentDir
+	} else {
+		vCtx.LogError(e.Error())
+		return nil
+	}
+
+	absFile, ok := vCtx.AbsPath(file)
+	if !ok {
+		return nil
+	}
+
+	ret := vCtx.subContext(
+		&Command{Tag: "job", Exec: jobName, File: absFile},
+		Env{},
+	)
+
+	ret.parent = nil
+	ret.runnerGroupMap["local"] = []string{"local"}
+	ret.runnerMap["local"] = &LocalRunner{}
+
+	return ret
+}
+
+func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
+	runCmd := (&Context{rawCmd: rawCmd, upEnv: upEnv}).ParseCommand()
+	file := p.file
+	runners := p.runners
+	path := p.path
+	config := Config{}
+
+	switch runCmd.Tag {
+	case "cmd", "script":
+		if len(rawCmd.Args) > 0 {
+			p.Clone("%s.args", p.path).LogError(
+				"unsupported args on tag \"%s\"",
+				runCmd.Tag,
+			)
+		}
+
+		if rawCmd.File != "" {
+			p.Clone("%s.file", p.path).LogError(
+				"unsupported file on tag \"%s\"",
+				runCmd.Tag,
+			)
+		}
+
+		config = p.config
+	case "job":
+		if len(rawCmd.Stdin) > 0 {
+			p.Clone("%s.stdin", p.path).LogError(
+				"unsupported stdin on tag \"%s\"",
+				runCmd.Tag,
+			)
+		}
+
+		// Set file and load config
+		if runCmd.File == "" {
+			config = p.config
+		} else if absFile, ok := p.AbsPath(runCmd.File); !ok {
+			return nil
+		} else if retFile, ok := p.Clone("%s.file", p.path).
+			LoadConfig(absFile, &config); !ok {
+			return nil
+		} else {
+			file = retFile
+			path = ""
+		}
+
+		// Check is the job exist
+		if _, ok := config[runCmd.Exec]; !ok {
+			p.Clone("%s.exec", p.path).
+				LogError("could not find job \"%s\"", runCmd.Exec)
+			return nil
+		}
+	default:
+		p.Clone("%s.tag", p.path).LogError("unsupported tag \"%s\"", runCmd.Tag)
+		return nil
+	}
+
+	// Set runners
+	if runCmd.On != "" {
+		if v := p.getRunners(runCmd.On); len(v) > 0 {
+			runners = v
+		} else {
+			return nil
+		}
+	}
+
+	return &Context{
+		runnerGroupMap: make(map[string][]string),
+		runnerMap:      p.runnerMap,
+		config:         config,
+		parent:         p,
+		rawCmd:         rawCmd,
+		runCmd:         runCmd,
+		runners:        runners,
+		path:           path,
+		file:           file,
+		upEnv:          upEnv,
 	}
 }
 
-func (p *CmdContext) getRunnersNameByRunnerGroup(groupName string) []string {
+func (p *Context) Clone(format string, a ...interface{}) *Context {
+	return &Context{
+		runnerGroupMap: p.runnerGroupMap,
+		runnerMap:      p.runnerMap,
+		config:         p.config,
+		parent:         p.parent,
+		rawCmd:         p.rawCmd,
+		runCmd:         p.runCmd,
+		runners:        p.runners,
+		path:           fmt.Sprintf(format, a...),
+		file:           p.file,
+		upEnv:          p.upEnv,
+	}
+}
+
+func (p *Context) getRunnersNameByRunnerGroup(groupName string) []string {
 	if sshGroup, ok := p.runnerGroupMap[groupName]; ok {
 		return append([]string{}, sshGroup...)
 	} else if p.parent != nil {
@@ -46,7 +163,7 @@ func (p *CmdContext) getRunnersNameByRunnerGroup(groupName string) []string {
 	}
 }
 
-func (p *CmdContext) getRunners(runOn string) []Runner {
+func (p *Context) getRunners(runOn string) []Runner {
 	ret := make([]Runner, 0)
 
 	for _, groupName := range strings.Split(runOn, ",") {
@@ -54,7 +171,7 @@ func (p *CmdContext) getRunners(runOn string) []Runner {
 			runnersName := p.getRunnersNameByRunnerGroup(groupName)
 
 			if len(runnersName) == 0 {
-				p.LogError("could not find SSHGroup \"%s\"", groupName)
+				p.LogError("could not find group \"%s\"", groupName)
 				return nil
 			}
 
@@ -77,64 +194,18 @@ func (p *CmdContext) getRunners(runOn string) []Runner {
 	return ret
 }
 
-func (p *CmdContext) newJobCommandContext(cmd *Command, parseEnv Env) *CmdContext {
-	ret := &CmdContext{
-		runnerGroupMap: make(map[string][]string),
-		runnerMap:      p.runnerMap,
-		parent:         p,
-		cmd:            cmd,
-		runners:        append([]Runner{}, p.runners...),
-		path:           p.path,
-		config:         p.config,
-		parseEnv:       parseEnv,
-	}
-
-	// Parse Command
-	parsedCmd := ret.ParseCommand()
-	if parsedCmd == nil {
-		return nil
-	}
-
-	// Redirect config
-	if parsedCmd.Type == "job" && parsedCmd.Config != "" {
-		config, ok := p.AbsPath(parsedCmd.Config)
-		if !ok {
-			return nil
-		}
-		ret.config = config
-		ret.path = ""
-	}
-
-	// Redirect runners
-	if parsedCmd.On != "" {
-		runners := p.getRunners(parsedCmd.On)
-		if runners == nil {
-			return nil
-		}
-		ret.runners = runners
-	}
-
-	return ret
-}
-
-func (p *CmdContext) Run() bool {
-	// Parse command
-	cmd := p.ParseCommand()
-	if cmd == nil {
-		return false
-	}
-
+func (p *Context) Run() bool {
 	if len(p.runners) == 0 {
 		// Check
 		p.Clone("kernel error: runners must be checked in previous call")
 		return false
 	} else if len(p.runners) == 1 {
 		// If len(p.runners) == 1. Run it
-		switch cmd.Type {
+		switch p.runCmd.Tag {
 		case "job":
 			return p.runJob()
 		case "cmd":
-			return p.runCmd()
+			return p.runCommand()
 		case "script":
 			return p.runScript()
 		default:
@@ -155,36 +226,34 @@ func (p *CmdContext) Run() bool {
 	}
 }
 
-func (p *CmdContext) runJob() bool {
-	// Parse command
-	cmd := p.ParseCommand()
-	if cmd == nil {
-		return false
-	}
-
-	// Load config
-	config := &Config{}
-	if !p.LoadConfig(config) {
-		return false
-	}
-
+func (p *Context) runJob() bool {
 	// Get job
-	job, ok := config.Jobs[cmd.Exec]
+	job, ok := p.config[p.runCmd.Exec]
 	if !ok {
-		p.Clone("jobs.%s", cmd.Exec).
-			LogError("could not find job \"%s\"", cmd.Exec)
+		p.Clone("jobs.%s", p.runCmd.Exec).
+			LogError("could not find job \"%s\"", p.runCmd.Exec)
 		return false
 	}
 
 	// Make jobEnv
-	rootEnv := p.GetRootEnv()
-	jobEnv := rootEnv.Merge(rootEnv.ParseEnv(job.Env)).Merge(cmd.Env)
+	rootEnv := Env{
+		"KeyESC":   "\033",
+		"KeyEnter": "\n",
+	}.Merge(Env{
+		"ConfigDir": filepath.Dir(p.file),
+	})
+	jobEnv := rootEnv.Merge(rootEnv.ParseEnv(job.Env)).Merge(p.runCmd.Env)
 
 	// If the commands are run in sequence, run them one by one and return
 	if !job.Async {
 		for i := 0; i < len(job.Commands); i++ {
-			ctx := p.Clone("jobs.%s.commands[%d]", cmd.Exec, i).
-				newJobCommandContext(job.Commands[i], jobEnv)
+			ctx := p.Clone("%s.commands[%d]", p.runCmd.Exec, i).
+				subContext(job.Commands[i], jobEnv)
+
+			if ctx == nil {
+				return false
+			}
+
 			if !ctx.Run() {
 				return false
 			}
@@ -198,8 +267,8 @@ func (p *CmdContext) runJob() bool {
 
 	for i := 0; i < len(job.Commands); i++ {
 		go func(idx int) {
-			ctx := p.Clone("jobs.%s.commands[%d]", cmd.Exec, idx).
-				newJobCommandContext(job.Commands[idx], jobEnv)
+			ctx := p.Clone("jobs.%s.commands[%d]", p.runCmd.Exec, idx).
+				subContext(job.Commands[idx], jobEnv)
 			waitCH <- ctx.Run()
 		}(i)
 	}
@@ -215,15 +284,15 @@ func (p *CmdContext) runJob() bool {
 	return ret
 }
 
-func (p *CmdContext) runScript() bool {
+func (p *Context) runScript() bool {
 	return false
 }
 
-func (p *CmdContext) runCmd() bool {
+func (p *Context) runCommand() bool {
 	return p.runners[0].Run(p)
 }
 
-func (p *CmdContext) getRunnersName() string {
+func (p *Context) getRunnersName() string {
 	nameArray := make([]string, 0)
 	for _, runner := range p.runners {
 		nameArray = append(nameArray, runner.Name())
@@ -236,14 +305,16 @@ func (p *CmdContext) getRunnersName() string {
 	return strings.Join(nameArray, ",")
 }
 
-func (p *CmdContext) AbsPath(path string) (string, bool) {
-	if absPath, e := filepath.Abs(path); e != nil {
-		p.LogError(e.Error())
-		return "", false
-	} else if absPath == path {
+func (p *Context) AbsPath(path string) (string, bool) {
+	dir := p.file
+	if IsFile(p.file) {
+		dir = filepath.Dir(p.file)
+	}
+
+	if filepath.IsAbs(path) {
 		return path, true
 	} else if ret, e := filepath.Abs(
-		filepath.Join(filepath.Dir(p.config), path),
+		filepath.Join(dir, path),
 	); e != nil {
 		p.LogError(e.Error())
 		return "", false
@@ -252,33 +323,34 @@ func (p *CmdContext) AbsPath(path string) (string, bool) {
 	}
 }
 
-func (p *CmdContext) LoadConfig(v interface{}) bool {
+func (p *Context) LoadConfig(absPath string, v interface{}) (string, bool) {
 	var fnUnmarshal (func(data []byte, v interface{}) error)
+	ret := absPath
 
-	// If config is a directory, we try to find default config file
-	if IsDir(p.config) {
-		yamlFile := filepath.Join(p.config, "main.yaml")
-		ymlFile := filepath.Join(p.config, "main.yml")
-		jsonFile := filepath.Join(p.config, "main.json")
+	// If config file is a directory, we try to find default config file
+	if IsDir(absPath) {
+		yamlFile := filepath.Join(absPath, "main.yaml")
+		ymlFile := filepath.Join(absPath, "main.yml")
+		jsonFile := filepath.Join(absPath, "main.json")
 
 		if IsFile(yamlFile) {
-			p.config = yamlFile
+			ret = yamlFile
 		} else if IsFile(ymlFile) {
-			p.config = ymlFile
+			ret = ymlFile
 		} else if IsFile(jsonFile) {
-			p.config = jsonFile
+			ret = jsonFile
 		} else {
 			p.LogError(
 				"could not find main.yaml or main.yml or main.json "+
 					"in directory \"%s\"\n",
-				p.config,
+				absPath,
 			)
-			return false
+			return "", false
 		}
 	}
 
 	// Check the file extension, and set corresponding unmarshal func
-	ext := filepath.Ext(p.config)
+	ext := filepath.Ext(ret)
 	switch ext {
 	case ".json":
 		fnUnmarshal = json.Unmarshal
@@ -287,55 +359,38 @@ func (p *CmdContext) LoadConfig(v interface{}) bool {
 	case ".yaml":
 		fnUnmarshal = yaml.Unmarshal
 	default:
-		p.LogError("unsupported file extension \"%s\"", p.config)
-		return false
+		p.LogError("unsupported file extension \"%s\"", ret)
+		return "", false
 	}
 
 	// Read the config file, and unmarshal it to config structure
-	if b, e := ioutil.ReadFile(p.config); e != nil {
+	if b, e := ioutil.ReadFile(ret); e != nil {
 		p.LogError(e.Error())
-		return false
+		return "", false
 	} else if e := fnUnmarshal(b, v); e != nil {
 		p.LogError(e.Error())
-		return false
+		return "", false
 	} else {
-		return true
+		return ret, true
 	}
 }
 
-func (p *CmdContext) GetRootEnv() Env {
-	return Env{
-		"KeyESC":   "\033",
-		"KeyEnter": "\n",
-	}.Merge(Env{
-		"ConfigDir": filepath.Dir(p.config),
-	})
-}
-
-func (p *CmdContext) ParseCommand() *Command {
-	if p.cmd == nil {
-		p.LogError("kernel error: cmd is nil")
-		return nil
-	}
-
-	cmdEnv := p.parseEnv.ParseEnv(p.cmd.Env)
-	useEnv := p.parseEnv.Merge(cmdEnv)
+func (p *Context) ParseCommand() *Command {
+	cmdEnv := p.upEnv.ParseEnv(p.rawCmd.Env)
+	useEnv := p.upEnv.Merge(cmdEnv)
 
 	return &Command{
-		Type:   p.parseEnv.ParseString(p.cmd.Type, "cmd", true),
-		Exec:   useEnv.ParseString(p.cmd.Exec, "", false),
-		On:     useEnv.ParseString(p.cmd.On, "", true),
-		Inputs: useEnv.ParseStringArray(p.cmd.Inputs),
-		Env:    cmdEnv,
-		Config: useEnv.ParseString(p.cmd.Config, "", true),
+		Tag:   p.upEnv.ParseString(p.rawCmd.Tag, "cmd", true),
+		Exec:  useEnv.ParseString(p.rawCmd.Exec, "", false),
+		On:    useEnv.ParseString(p.rawCmd.On, "", true),
+		Stdin: useEnv.ParseStringArray(p.rawCmd.Stdin),
+		Env:   cmdEnv,
+		Args:  useEnv.ParseEnv(p.rawCmd.Args),
+		File:  useEnv.ParseString(p.rawCmd.File, "", true),
 	}
 }
 
-func (p *CmdContext) GetPath() string {
-	return p.path
-}
-
-func (p *CmdContext) GetUserInput(desc string, mode string) (string, bool) {
+func (p *Context) GetUserInput(desc string, mode string) (string, bool) {
 	switch mode {
 	case "password":
 		p.LogInfo("")
@@ -363,24 +418,23 @@ func (p *CmdContext) GetUserInput(desc string, mode string) (string, bool) {
 	}
 }
 
-func (p *CmdContext) LogRawInfo(format string, a ...interface{}) {
+func (p *Context) LogRawInfo(format string, a ...interface{}) {
 	log(fmt.Sprintf(format, a...), color.FgBlue)
 }
 
-func (p *CmdContext) LogRawError(format string, a ...interface{}) {
+func (p *Context) LogRawError(format string, a ...interface{}) {
 	log(fmt.Sprintf(format, a...), color.FgRed)
 }
 
-func (p *CmdContext) LogInfo(format string, a ...interface{}) {
+func (p *Context) LogInfo(format string, a ...interface{}) {
 	p.Log(fmt.Sprintf(format, a...), "")
 }
 
-func (p *CmdContext) LogError(format string, a ...interface{}) {
+func (p *Context) LogError(format string, a ...interface{}) {
 	p.Log("", fmt.Sprintf(format, a...))
 }
 
-func (p *CmdContext) Log(outStr string, errStr string) {
-
+func (p *Context) Log(outStr string, errStr string) {
 	logItems := []interface{}{}
 
 	logItems = append(logItems, p.getRunnersName())
@@ -388,7 +442,7 @@ func (p *CmdContext) Log(outStr string, errStr string) {
 
 	logItems = append(logItems, " > ")
 	logItems = append(logItems, color.FgGreen)
-	logItems = append(logItems, p.config)
+	logItems = append(logItems, p.file)
 	logItems = append(logItems, color.FgYellow)
 
 	if p.path != "" {
@@ -401,10 +455,9 @@ func (p *CmdContext) Log(outStr string, errStr string) {
 	logItems = append(logItems, "\n")
 	logItems = append(logItems, color.FgGreen)
 
-	if p.cmd != nil {
-		parsedCmd := p.ParseCommand()
-		if parsedCmd.Type == "cmd" && parsedCmd.Exec != "" {
-			logItems = append(logItems, GetStandradOut(parsedCmd.Exec))
+	if p.runCmd != nil {
+		if p.runCmd.Tag == "cmd" && p.runCmd.Exec != "" {
+			logItems = append(logItems, GetStandradOut(p.runCmd.Exec))
 			logItems = append(logItems, color.FgBlue)
 		}
 	}

@@ -1,4 +1,4 @@
-package context
+package ccbot
 
 import (
 	"os"
@@ -103,18 +103,16 @@ type Job struct {
 }
 
 type Command struct {
-	Type   string
-	Exec   string
-	On     string
-	Inputs []string
-	Env    Env
-	Config string
+	Tag   string
+	Exec  string
+	On    string
+	Stdin []string
+	Env   Env
+	Args  Env
+	File  string
 }
 
-type Config struct {
-	Name string
-	Jobs map[string]*Job
-}
+type Config map[string]*Job
 
 func GetStandradOut(s string) string {
 	if s != "" && s[len(s)-1] != '\n' {

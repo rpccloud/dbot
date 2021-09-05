@@ -3,21 +3,30 @@ package main
 import (
 	"flag"
 
-	"github.com/rpccloud/dbot/context"
+	"github.com/rpccloud/dbot/ccbot"
 )
 
 func main() {
-	entryPath := ""
+	cfgFile := ""
 	flag.StringVar(
-		&entryPath,
+		&cfgFile,
 		"config",
 		"",
-		"set config path",
+		"set config file",
 	)
+
+	jobName := ""
+	flag.StringVar(
+		&jobName,
+		"job",
+		"default",
+		"set the name of the job to run",
+	)
+
 	flag.Parse()
 
-	rootCtx := context.NewRootContext(entryPath)
-	if rootCtx != nil {
-		rootCtx.Run()
+	ctx := ccbot.NewContext(cfgFile, jobName)
+	if ctx != nil {
+		ctx.Run()
 	}
 }

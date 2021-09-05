@@ -1,40 +1,37 @@
----
-name: dbot apps
-jobs:
-  createCA:
-    env: 
-      OutputDir:  ${ConfigDir}/data
-      SSL_EXPIRE_DAYS: 109500
-      SSL_KEY_BITS: 4096
-      SSL_C: CN
-      SSL_ST:  Beijing
-      SSL_L:  Beijing
-      SSL_O: rpccloud.com
-      SSL_OU:  IT
-      SSL_CN:  com.rpccloud.dbot.config.openssl
-    commands:
-      - exec: mkdir ${OutputDir}
-      - exec: vi ${OutputDir}/ca.cnf
-        inputs: 
-          - i
-          - "[ req ]\n"
-          - "default_bits           = ${SSL_KEY_BITS}\n"
-          - "distinguished_name     = req_distinguished_name\n"
-          - "prompt                 = no\n"
-          - "[ req_distinguished_name ]\n"
-          - "C                      = ${SSL_C}\n"
-          - "ST                     = ${SSL_ST}\n"
-          - "L                      = ${SSL_L}\n"
-          - "O                      = ${SSL_O}\n"
-          - "OU                     = ${SSL_OU}\n"
-          - "CN                     = ${SSL_CN}\n"
-          - "[ v3_ca ]\n"
-          - "keyUsage = critical, keyCertSign, cRLSign\n"
-          - "basicConstraints = critical, CA:TRUE, pathlen:2\n"
-          - "subjectKeyIdentifier = hash\n"
-          - "authorityKeyIdentifier = keyid:always\n"
-          - "${KeyESC}:wq${KeyEnter}\n"
-      - exec: openssl genrsa -out ${OutputDir}/ca-key.pem ${SSL_KEY_BITS}
-      - exec: openssl req -x509 -new -nodes -config ${OutputDir}/ca.cnf 
-              -extensions v3_ca -key ${OutputDir}/ca-key.pem 
-              -days ${SSL_EXPIRE_DAYS} -out ${OutputDir}/ca.pem
+createCA:
+  env: 
+    OutputDir:  ${ConfigDir}/data
+    SSL_EXPIRE_DAYS: 109500
+    SSL_KEY_BITS: 4096
+    SSL_C: CN
+    SSL_ST:  Beijing
+    SSL_L:  Beijing
+    SSL_O: rpccloud.com
+    SSL_OU:  IT
+    SSL_CN:  com.rpccloud.dbot.config.openssl
+  commands:
+    - exec: mkdir ${OutputDir}
+    - exec: vi ${OutputDir}/ca.cnf
+      stdin: 
+        - i
+        - "[ req ]\n"
+        - "default_bits           = ${SSL_KEY_BITS}\n"
+        - "distinguished_name     = req_distinguished_name\n"
+        - "prompt                 = no\n"
+        - "[ req_distinguished_name ]\n"
+        - "C                      = ${SSL_C}\n"
+        - "ST                     = ${SSL_ST}\n"
+        - "L                      = ${SSL_L}\n"
+        - "O                      = ${SSL_O}\n"
+        - "OU                     = ${SSL_OU}\n"
+        - "CN                     = ${SSL_CN}\n"
+        - "[ v3_ca ]\n"
+        - "keyUsage = critical, keyCertSign, cRLSign\n"
+        - "basicConstraints = critical, CA:TRUE, pathlen:2\n"
+        - "subjectKeyIdentifier = hash\n"
+        - "authorityKeyIdentifier = keyid:always\n"
+        - "${KeyESC}:wq${KeyEnter}\n"
+    - exec: openssl genrsa -out ${OutputDir}/ca-key.pem ${SSL_KEY_BITS}
+    - exec: openssl req -x509 -new -nodes -config ${OutputDir}/ca.cnf 
+            -extensions v3_ca -key ${OutputDir}/ca-key.pem 
+            -days ${SSL_EXPIRE_DAYS} -out ${OutputDir}/ca.pem

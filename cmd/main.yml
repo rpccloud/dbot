@@ -1,24 +1,25 @@
----
-name: dbot entry
-tasks:
-  default:
-    remotes: 
-      EtcdClient:
-        - host: 192.168.1.81
-          user: root
-    imports:
-      EtcdServers: 
-        config: ./remotes.yml
-        name: etcdServers
-    env: 
-      EtcdName: "name"
-    inputs: 
-      EtcdName: 
-        type: text
-        desc: "Input etcd cluster name: "
-    commands: 
-      - type: job
-        config: ../ca/main.yml
-        exec: createCA
-        env: 
-          OutputDir: ${ConfigDir}/../../data/etcd/ca/client
+default:
+  imports: 
+    EtcdServer: 
+      config: ./remotes.yml 
+      name: etcdServers
+  targets: 
+    EtcdClient:   
+      - host: 192.168.1.81
+        user: root
+  env: 
+    EtcdName: "name"
+  inputs: 
+    EtcdName: 
+      type: text
+      desc: "Input etcd cluster name: "
+  commands: 
+    - tag: job
+      env: 
+        OutputDir: ${ConfigDir}/../../data/etcd/ca/client
+      exec: initEtcdNodeCA
+      file: ../examples/etcd/main.yml
+    - exec: tr [a-z] [A-Z]
+      stdin:
+        - abc
+    - exec: echo "ok"

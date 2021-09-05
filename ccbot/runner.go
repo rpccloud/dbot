@@ -1,4 +1,4 @@
-package context
+package ccbot
 
 import (
 	"bytes"
@@ -35,7 +35,7 @@ func filterString(str string, filter []string) bool {
 }
 
 func reportRunnerResult(
-	ctx *CmdContext, e error, out *bytes.Buffer, err *bytes.Buffer,
+	ctx *Context, e error, out *bytes.Buffer, err *bytes.Buffer,
 ) (canContinue bool) {
 	outString := ""
 	errString := ""
@@ -108,7 +108,7 @@ func (p *RunnerInput) Read(b []byte) (n int, err error) {
 
 type Runner interface {
 	Name() string
-	Run(ctx *CmdContext) bool
+	Run(ctx *Context) bool
 }
 
 type LocalRunner struct {
@@ -119,7 +119,7 @@ func (p *LocalRunner) Name() string {
 	return fmt.Sprintf("%s@local", os.Getenv("USER"))
 }
 
-func (p *LocalRunner) Run(ctx *CmdContext) bool {
+func (p *LocalRunner) Run(ctx *Context) bool {
 	p.Lock()
 	defer p.Unlock()
 
@@ -140,7 +140,7 @@ func (p *LocalRunner) Run(ctx *CmdContext) bool {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	execCommand := exec.Command(cmdArray[0], cmdArray[1:]...)
-	execCommand.Stdin = NewRunnerInput(cmd.Inputs, nil)
+	execCommand.Stdin = NewRunnerInput(cmd.Stdin, nil)
 	execCommand.Stdout = stdout
 	execCommand.Stderr = stderr
 
@@ -158,7 +158,7 @@ type SSHRunner struct {
 }
 
 func NewSSHRunner(
-	ctx *CmdContext,
+	ctx *Context,
 	port string,
 	user string,
 	host string,
@@ -184,7 +184,7 @@ func (p *SSHRunner) Name() string {
 	return fmt.Sprintf("%s@%s:%s", p.user, p.host, p.port)
 }
 
-func (p *SSHRunner) Run(ctx *CmdContext) bool {
+func (p *SSHRunner) Run(ctx *Context) bool {
 	p.Lock()
 	defer p.Unlock()
 
@@ -205,7 +205,7 @@ func (p *SSHRunner) Run(ctx *CmdContext) bool {
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
 
-		session.Stdin = NewRunnerInput(cmd.Inputs, nil)
+		session.Stdin = NewRunnerInput(cmd.Stdin, nil)
 		session.Stdout = stdout
 		session.Stderr = stderr
 
@@ -213,7 +213,7 @@ func (p *SSHRunner) Run(ctx *CmdContext) bool {
 	}
 }
 
-func (p *SSHRunner) getClient(ctx *CmdContext) *ssh.Client {
+func (p *SSHRunner) getClient(ctx *Context) *ssh.Client {
 	fnGetPassworldConfig := func(password string) *ssh.ClientConfig {
 		return &ssh.ClientConfig{
 			User:            p.user,
@@ -223,7 +223,7 @@ func (p *SSHRunner) getClient(ctx *CmdContext) *ssh.Client {
 	}
 
 	fnParseKeyConfig := func(
-		ctx *CmdContext,
+		ctx *Context,
 		fileBytes []byte,
 		log bool,
 	) *ssh.ClientConfig {
@@ -243,7 +243,7 @@ func (p *SSHRunner) getClient(ctx *CmdContext) *ssh.Client {
 		}
 	}
 
-	fnClient := func(c *CmdContext, cfg *ssh.ClientConfig, log bool) *ssh.Client {
+	fnClient := func(c *Context, cfg *ssh.ClientConfig, log bool) *ssh.Client {
 		ret, e := ssh.Dial("tcp", fmt.Sprintf("%s:%s", p.host, p.port), cfg)
 		if e != nil {
 			if log {

@@ -1,27 +1,16 @@
----
-name: dbot apps
-jobs:
-  initEtcdNodeCA:
-    commands:
-      - exec: apt update
-      - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
-      - type: job
-        config: ../ca/main.yml
-        exec: createCA
-        env: 
-          OutputDir: ${ConfigDir}/../../data/etcd/ca/nodes
-  initEtcdClientCA:
-    commands:
-      - exec: apt update
-      - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
-      - type: job
-        config: ../ca/main.yml
-        exec: createCA
-        env: 
-          OutputDir: ${ConfigDir}/../../data/etcd/ca/client
-  install:
-    commands:
-    - exec: echo "install etcd"
-    - type: job
-      config: "./sub.yml"
-      exec: install
+initEtcdNodeCA:
+  commands:
+    - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
+    - tag: job
+      file: ../ca/main.yml
+      exec: createCA
+      env: 
+        OutputDir: ${ConfigDir}/../../data/etcd/ca/nodes
+initEtcdClientCA:
+  commands:
+    - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
+    - tag: job
+      file: ../ca/main.yml
+      exec: createCA
+      env: 
+        OutputDir: ${ConfigDir}/../../data/etcd/ca/client
