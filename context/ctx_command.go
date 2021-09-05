@@ -67,21 +67,31 @@ func (p *CmdContext) newCommandContext(cmd *Command, parseEnv Env) Context {
 		},
 	}
 
-	// Parse cmd.On
-	cmdOn := ret.ParseCommand().On
-
-	// Use default runners
-	if cmdOn == "" {
-		return ret
-	}
-
-	// Use defined runners
-	runners := p.getRunners(cmdOn)
-	if runners == nil {
+	// Parse Command
+	parsedCmd := ret.ParseCommand()
+	if parsedCmd == nil {
 		return nil
 	}
 
-	ret.runners = runners
+	// Redirect config
+	if parsedCmd.Type == "job" && parsedCmd.Config != "" {
+		config, ok := p.AbsPath(parsedCmd.Config)
+		if !ok {
+			return nil
+		}
+		ret.config = config
+		ret.path = ""
+	}
+
+	// Redirect runners
+	if parsedCmd.On != "" {
+		runners := p.getRunners(parsedCmd.On)
+		if runners == nil {
+			return nil
+		}
+		ret.runners = runners
+	}
+
 	return ret
 }
 
