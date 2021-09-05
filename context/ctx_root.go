@@ -145,7 +145,15 @@ func (p *RootContext) newCommandContext(
 	}
 }
 
-func (p *RootContext) Run() bool {
+func (p *RootContext) Run() (ret bool) {
+	defer func() {
+		if ret {
+			p.LogRawInfo("dbot runs successfully \n")
+		} else {
+			p.LogRawError("dbot runs failed \n")
+		}
+	}()
+
 	// Check
 	if len(p.runContexts) == 0 {
 		p.Clone("main").LogError("could not find any tasks")

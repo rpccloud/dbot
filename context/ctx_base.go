@@ -218,6 +218,7 @@ func (p *BaseContext) LogError(format string, a ...interface{}) {
 }
 
 func (p *BaseContext) Log(outStr string, errStr string) {
+
 	logItems := []interface{}{}
 
 	logItems = append(logItems, p.getRunnersName())
@@ -238,9 +239,12 @@ func (p *BaseContext) Log(outStr string, errStr string) {
 	logItems = append(logItems, "\n")
 	logItems = append(logItems, color.FgGreen)
 
-	if p.cmd != nil && p.cmd.Type == "cmd" && p.cmd.Exec != "" {
-		logItems = append(logItems, GetStandradOut(p.cmd.Exec))
-		logItems = append(logItems, color.FgBlue)
+	if p.cmd != nil {
+		parsedCmd := p.ParseCommand()
+		if parsedCmd.Type == "cmd" && parsedCmd.Exec != "" {
+			logItems = append(logItems, GetStandradOut(parsedCmd.Exec))
+			logItems = append(logItems, color.FgBlue)
+		}
 	}
 
 	if outStr != "" {
