@@ -1,6 +1,7 @@
 package ccbot
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/fatih/color"
+	"github.com/robertkrimen/otto"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v2"
 )
@@ -379,7 +381,24 @@ func (p *Context) runJob() bool {
 }
 
 func (p *Context) runScript() bool {
-	return false
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	vm := otto.New()
+	_ = vm.Set("dbot", &DbotObject{
+		stdout: stdout,
+		stderr: stderr,
+		ctx:    p,
+	})
+	_, e := vm.Run(p.runCmd.Exec)
+
+	p.Log(stdout.String(), stderr.String())
+
+	if e != nil {
+		p.LogError(e.Error())
+	}
+
+	return e == nil
 }
 
 func (p *Context) runCommand() bool {
@@ -526,7 +545,7 @@ func (p *Context) Log(outStr string, errStr string) {
 	logItems = append(logItems, color.FgGreen)
 
 	if p.runCmd != nil {
-		if p.runCmd.Tag == "cmd" && p.runCmd.Exec != "" {
+		if p.runCmd.Tag != "job" && p.runCmd.Exec != "" {
 			logItems = append(logItems, GetStandradOut(p.runCmd.Exec))
 			logItems = append(logItems, color.FgBlue)
 		}
