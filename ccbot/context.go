@@ -17,7 +17,6 @@ import (
 type Context struct {
 	runnerGroupMap map[string][]string
 	runnerMap      map[string]Runner
-	config         Config
 	jobConfig      *Job
 	jobEnv         Env
 	parent         *Context
@@ -163,7 +162,7 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 	file := p.file
 	runners := p.runners
 	path := p.path
-	config := Config{}
+	// config := make(map[string]*Job)
 	jobConfig := p.jobConfig
 	needInitJob := false
 
@@ -182,8 +181,6 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 				runCmd.Tag,
 			)
 		}
-
-		config = p.config
 	case "job":
 		if len(rawCmd.Stdin) > 0 {
 			p.Clone("%s.stdin", p.path).LogError(
@@ -192,28 +189,34 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 			)
 		}
 
-		// Set file and load config
-		if runCmd.File == "" {
-			config = p.config
-		} else if absFile, ok := p.absPath(runCmd.File); !ok {
-			return nil
-		} else if retFile, ok := p.Clone("%s.file", p.path).
-			loadConfig(absFile, &config); !ok {
-			return nil
+		if runCmd.File != "" {
+			if v, ok := p.absPath(runCmd.File); ok {
+				file = v
+			} else {
+				return nil
+			}
+		}
+
+		// Load config
+		config := make(map[string]*Job)
+		if configFile, ok := p.Clone("%s.file", p.path).
+			loadConfig(file, &config); ok {
+			file = configFile
 		} else {
-			file = retFile
-			path = runCmd.Exec
+			return nil
 		}
 
 		// Check is the job exist
-		if v, ok := config[runCmd.Exec]; !ok {
+		if v, ok := config[runCmd.Exec]; ok {
+			jobConfig = v
+			needInitJob = true
+		} else {
 			p.Clone("%s.exec", p.path).
 				LogError("could not find job \"%s\"", runCmd.Exec)
 			return nil
-		} else {
-			jobConfig = v
-			needInitJob = true
 		}
+
+		path = runCmd.Exec
 	default:
 		p.Clone("%s.tag", p.path).LogError("unsupported tag \"%s\"", runCmd.Tag)
 		return nil
@@ -237,7 +240,6 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 	ret := &Context{
 		runnerGroupMap: runnerGroupMap,
 		runnerMap:      p.runnerMap,
-		config:         config,
 		jobConfig:      jobConfig,
 		jobEnv:         p.jobEnv,
 		parent:         p,
@@ -302,7 +304,6 @@ func (p *Context) Clone(format string, a ...interface{}) *Context {
 	return &Context{
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
-		config:         p.config,
 		jobConfig:      p.jobConfig,
 		jobEnv:         p.jobEnv,
 		parent:         p.parent,
