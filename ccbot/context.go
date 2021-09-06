@@ -34,28 +34,21 @@ func NewContext(file string, jobName string) *Context {
 		runnerMap: map[string]Runner{
 			"local": &LocalRunner{},
 		},
-		path:    "dbot.init",
+		path:    jobName,
 		file:    "",
 		runners: []Runner{&LocalRunner{}},
 		runCmd:  &Command{Env: Env{}},
 	}
 
-	if currentDir, e := os.Getwd(); e == nil {
-		vCtx.file = currentDir
-	} else {
+	absFile, e := filepath.Abs(file)
+	if e != nil {
 		vCtx.LogError(e.Error())
 		return nil
 	}
-
-	absFile, ok := vCtx.absPath(file)
-	if !ok {
-		return nil
-	}
+	vCtx.file = absFile
 
 	ret := vCtx.subContext(&Command{Tag: "job", Exec: jobName, File: absFile})
-
 	ret.parent = nil
-
 	return ret
 }
 
@@ -85,7 +78,7 @@ func (p *Context) init() bool {
 		importConfig := make(map[string][]*Remote)
 
 		if absFile, ok := p.Clone("%s.imports.%s", p.path, key).
-			absPath(itFile); !ok {
+			AbsPath(itFile); !ok {
 			return false
 		} else if _, ok := p.Clone("%s.imports.%s", p.path, key).
 			loadConfig(absFile, importConfig); !ok {
@@ -195,7 +188,7 @@ func (p *Context) subContext(rawCmd *Command) *Context {
 		}
 
 		if runCmd.File != "" {
-			if v, ok := p.absPath(runCmd.File); ok {
+			if v, ok := p.AbsPath(runCmd.File); ok {
 				file = v
 			} else {
 				return nil
@@ -412,7 +405,7 @@ func (p *Context) getRunnersName() string {
 	return strings.Join(nameArray, ",")
 }
 
-func (p *Context) absPath(path string) (string, bool) {
+func (p *Context) AbsPath(path string) (string, bool) {
 	dir := p.file
 	if IsFile(p.file) {
 		dir = filepath.Dir(p.file)
