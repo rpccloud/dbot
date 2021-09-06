@@ -17,11 +17,13 @@ import (
 type Context struct {
 	runnerGroupMap map[string][]string
 	runnerMap      map[string]Runner
+	config         Config
+	jobConfig      *Job
+	jobEnv         Env
 	parent         *Context
 	rawCmd         *Command
 	runCmd         *Command
 	runners        []Runner
-	config         Config
 	path           string
 	file           string
 	upEnv          Env
@@ -29,10 +31,15 @@ type Context struct {
 
 func NewContext(file string, jobName string) *Context {
 	vCtx := &Context{
-		runnerMap: make(map[string]Runner),
-		path:      "dbot.init",
-		file:      "",
-		runners:   []Runner{&LocalRunner{}},
+		runnerGroupMap: map[string][]string{
+			"local": {"local"},
+		},
+		runnerMap: map[string]Runner{
+			"local": &LocalRunner{},
+		},
+		path:    "dbot.init",
+		file:    "",
+		runners: []Runner{&LocalRunner{}},
 	}
 
 	if currentDir, e := os.Getwd(); e == nil {
@@ -53,8 +60,100 @@ func NewContext(file string, jobName string) *Context {
 	)
 
 	ret.parent = nil
-	ret.runnerGroupMap["local"] = []string{"local"}
-	ret.runnerMap["local"] = &LocalRunner{}
+
+	return ret
+}
+
+func (p *Context) init() bool {
+	// init jobEnv
+	rootEnv := p.getRootEnv()
+	useEnv := rootEnv.
+		Merge(rootEnv.ParseEnv(p.jobConfig.Env)).
+		Merge(p.runCmd.Args)
+	jobEnv := useEnv.Merge(Env{})
+	for key, it := range p.jobConfig.Inputs {
+		itDesc := useEnv.ParseString(it.Desc, "input "+key+": ", false)
+		itType := useEnv.ParseString(it.Type, "text", true)
+		value, ok := p.Clone("%s.inputs.%s", p.path, key).
+			GetUserInput(itDesc, itType)
+		if !ok {
+			return false
+		}
+		jobEnv[key] = useEnv.ParseString(value, "", false)
+	}
+	p.jobEnv = jobEnv
+
+	// Load imports
+	for key, it := range p.jobConfig.Imports {
+		itName := jobEnv.ParseString(it.Name, "", true)
+		itFile := jobEnv.ParseString(it.File, "", true)
+		importConfig := make(map[string][]*Remote)
+
+		if absFile, ok := p.Clone("%s.imports.%s", p.path, key).
+			absPath(itFile); !ok {
+			return false
+		} else if _, ok := p.Clone("%s.imports.%s", p.path, key).
+			loadConfig(absFile, importConfig); !ok {
+			return false
+		} else if importItem, ok := importConfig[itName]; !ok {
+			return false
+		} else {
+			ctx := &Context{
+				runnerGroupMap: p.runnerGroupMap,
+				runnerMap:      p.runnerMap,
+				path:           itName,
+				file:           absFile,
+				runners:        []Runner{p.runnerMap["local"]},
+			}
+
+			sshGroup := ctx.loadSSHGroup(importItem)
+			if sshGroup == nil {
+				return false
+			}
+			p.runnerGroupMap[key] = sshGroup
+		}
+	}
+
+	// Load remotes
+	for key, list := range p.jobConfig.Remotes {
+		sshGroup := p.Clone("%s.remotes.%s", p.path, key).loadSSHGroup(list)
+		if sshGroup == nil {
+			return false
+		}
+		p.runnerGroupMap[key] = sshGroup
+	}
+
+	return true
+}
+
+func (p *Context) loadSSHGroup(list []*Remote) []string {
+	if len(list) == 0 {
+		p.LogError("list is empty")
+		return nil
+	}
+
+	ret := make([]string, 0)
+	for idx, it := range list {
+		host := Env{}.ParseString(it.Host, "", true)
+		user := Env{}.ParseString(it.User, os.Getenv("USER"), true)
+		port := Env{}.ParseString(it.Port, "22", true)
+
+		id := fmt.Sprintf("%s@%s:%s", user, host, port)
+
+		if _, ok := p.runnerMap[id]; !ok {
+			ssh := NewSSHRunner(
+				p.Clone("%s[%d]", p.path, idx), port, user, host,
+			)
+
+			if ssh == nil {
+				return nil
+			}
+
+			p.runnerMap[id] = ssh
+		}
+
+		ret = append(ret, id)
+	}
 
 	return ret
 }
@@ -65,6 +164,8 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 	runners := p.runners
 	path := p.path
 	config := Config{}
+	jobConfig := p.jobConfig
+	needInitJob := false
 
 	switch runCmd.Tag {
 	case "cmd", "script":
@@ -101,14 +202,17 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 			return nil
 		} else {
 			file = retFile
-			path = ""
+			path = runCmd.Exec
 		}
 
 		// Check is the job exist
-		if _, ok := config[runCmd.Exec]; !ok {
+		if v, ok := config[runCmd.Exec]; !ok {
 			p.Clone("%s.exec", p.path).
 				LogError("could not find job \"%s\"", runCmd.Exec)
 			return nil
+		} else {
+			jobConfig = v
+			needInitJob = true
 		}
 	default:
 		p.Clone("%s.tag", p.path).LogError("unsupported tag \"%s\"", runCmd.Tag)
@@ -124,10 +228,18 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 		}
 	}
 
-	return &Context{
-		runnerGroupMap: make(map[string][]string),
+	// clone runnerGroupMap
+	runnerGroupMap := make(map[string][]string)
+	for key, value := range p.runnerGroupMap {
+		runnerGroupMap[key] = value
+	}
+
+	ret := &Context{
+		runnerGroupMap: runnerGroupMap,
 		runnerMap:      p.runnerMap,
 		config:         config,
+		jobConfig:      jobConfig,
+		jobEnv:         p.jobEnv,
 		parent:         p,
 		rawCmd:         rawCmd,
 		runCmd:         runCmd,
@@ -136,6 +248,14 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 		file:           file,
 		upEnv:          upEnv,
 	}
+
+	if needInitJob {
+		if !ret.init() {
+			return nil
+		}
+	}
+
+	return ret
 }
 
 func (p *Context) getRootEnv() Env {
@@ -147,24 +267,14 @@ func (p *Context) getRootEnv() Env {
 	})
 }
 
-func (p *Context) getRunnersNameByRunnerGroup(groupName string) []string {
-	if sshGroup, ok := p.runnerGroupMap[groupName]; ok {
-		return append([]string{}, sshGroup...)
-	} else if p.parent != nil {
-		return p.parent.getRunnersNameByRunnerGroup(groupName)
-	} else {
-		return []string{}
-	}
-}
-
 func (p *Context) getRunners(runOn string) []Runner {
 	ret := make([]Runner, 0)
 
 	for _, groupName := range strings.Split(runOn, ",") {
 		if groupName = strings.TrimSpace(groupName); groupName != "" {
-			runnersName := p.getRunnersNameByRunnerGroup(groupName)
+			runnersName, ok := p.runnerGroupMap[groupName]
 
-			if len(runnersName) == 0 {
+			if !ok {
 				p.LogError("could not find group \"%s\"", groupName)
 				return nil
 			}
@@ -193,6 +303,8 @@ func (p *Context) Clone(format string, a ...interface{}) *Context {
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
 		config:         p.config,
+		jobConfig:      p.jobConfig,
+		jobEnv:         p.jobEnv,
 		parent:         p.parent,
 		rawCmd:         p.rawCmd,
 		runCmd:         p.runCmd,
@@ -236,23 +348,11 @@ func (p *Context) Run() bool {
 }
 
 func (p *Context) runJob() bool {
-	// Get job
-	job, ok := p.config[p.runCmd.Exec]
-	if !ok {
-		p.Clone("jobs.%s", p.runCmd.Exec).
-			LogError("could not find job \"%s\"", p.runCmd.Exec)
-		return false
-	}
-
-	// Make jobEnv
-	rootEnv := p.getRootEnv()
-	jobEnv := rootEnv.Merge(rootEnv.ParseEnv(job.Env)).Merge(p.runCmd.Env)
-
 	// If the commands are run in sequence, run them one by one and return
-	if !job.Async {
-		for i := 0; i < len(job.Commands); i++ {
+	if !p.jobConfig.Async {
+		for i := 0; i < len(p.jobConfig.Commands); i++ {
 			ctx := p.Clone("%s.commands[%d]", p.runCmd.Exec, i).
-				subContext(job.Commands[i], jobEnv)
+				subContext(p.jobConfig.Commands[i], p.jobEnv)
 
 			if ctx == nil {
 				return false
@@ -267,19 +367,19 @@ func (p *Context) runJob() bool {
 	}
 
 	// The commands are run async
-	waitCH := make(chan bool, len(job.Commands))
+	waitCH := make(chan bool, len(p.jobConfig.Commands))
 
-	for i := 0; i < len(job.Commands); i++ {
+	for i := 0; i < len(p.jobConfig.Commands); i++ {
 		go func(idx int) {
 			ctx := p.Clone("jobs.%s.commands[%d]", p.runCmd.Exec, idx).
-				subContext(job.Commands[idx], jobEnv)
+				subContext(p.jobConfig.Commands[idx], p.jobEnv)
 			waitCH <- ctx.Run()
 		}(i)
 	}
 
 	// Wait for all commands to complete
 	ret := true
-	for i := 0; i < len(job.Commands); i++ {
+	for i := 0; i < len(p.jobConfig.Commands); i++ {
 		if !<-waitCH {
 			ret = false
 		}
@@ -317,9 +417,7 @@ func (p *Context) absPath(path string) (string, bool) {
 
 	if filepath.IsAbs(path) {
 		return path, true
-	} else if ret, e := filepath.Abs(
-		filepath.Join(dir, path),
-	); e != nil {
+	} else if ret, e := filepath.Abs(filepath.Join(dir, path)); e != nil {
 		p.LogError(e.Error())
 		return "", false
 	} else {

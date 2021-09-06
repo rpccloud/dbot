@@ -1,7 +1,7 @@
 default:
   imports: 
     EtcdServer: 
-      config: ./remotes.yml 
+      file: ./remotes.yml 
       name: etcdServers
   targets: 
     EtcdClient:   

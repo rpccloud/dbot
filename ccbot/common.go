@@ -77,9 +77,9 @@ func (p Env) Merge(env Env) Env {
 }
 
 type Import struct {
-	Name   string
-	Config string
-	Env    Env
+	Name string
+	File string
+	Env  Env
 }
 
 type Input struct {
