@@ -104,6 +104,7 @@ type DbotObject struct {
 	stdout *bytes.Buffer
 	stderr *bytes.Buffer
 	ctx    *Context
+	seed   int
 }
 
 func (p *DbotObject) Log(call otto.FunctionCall) otto.Value {
@@ -155,8 +156,10 @@ func (p *DbotObject) Command(call otto.FunctionCall) otto.Value {
 	subCtx := p.ctx.subContext(cmd)
 
 	if subCtx != nil {
-		subCtx.Run()
+		subCtx.Clone("%s.exec-script.dbot.Command[%d]", p.ctx.path, p.seed).Run()
 	}
+
+	p.seed++
 
 	return otto.Value{}
 }

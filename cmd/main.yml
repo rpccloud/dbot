@@ -20,6 +20,9 @@ default:
           dbot.Log("hello log " + name)
           dbot.Error("hello error " + name)
           dbot.Command({
+            exec: 'echo "hello ytu"',
+          })
+          dbot.Command({
             exec: 'echo "hello uu"',
             stdin: [
               "hello",

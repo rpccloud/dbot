@@ -389,6 +389,7 @@ func (p *Context) runScript() bool {
 		stdout: stdout,
 		stderr: stderr,
 		ctx:    p,
+		seed:   0,
 	})
 	_, e := vm.Run(p.runCmd.Exec)
 
