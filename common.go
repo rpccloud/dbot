@@ -1,4 +1,4 @@
-package ccbot
+package dbot
 
 import (
 	"os"

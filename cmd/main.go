@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/rpccloud/dbot/ccbot"
+	"github.com/rpccloud/dbot"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 
 	flag.Parse()
 
-	ctx := ccbot.NewContext(cfgFile, jobName)
+	ctx := dbot.NewContext(cfgFile, jobName)
 	if ctx != nil {
 		ctx.Run()
 	}
