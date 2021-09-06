@@ -40,14 +40,7 @@ func NewContext(file string, jobName string) *Context {
 		runCmd:  &Command{Env: Env{}},
 	}
 
-	absFile, e := filepath.Abs(file)
-	if e != nil {
-		vCtx.LogError(e.Error())
-		return nil
-	}
-	vCtx.file = absFile
-
-	ret := vCtx.subContext(&Command{Tag: "job", Exec: jobName, File: absFile})
+	ret := vCtx.subContext(&Command{Tag: "job", Exec: jobName, File: file})
 	ret.parent = nil
 	return ret
 }
@@ -78,10 +71,7 @@ func (p *Context) init() bool {
 		importConfig := make(map[string][]*Remote)
 
 		if absFile, ok := p.Clone("%s.imports.%s", p.path, key).
-			AbsPath(itFile); !ok {
-			return false
-		} else if _, ok := p.Clone("%s.imports.%s", p.path, key).
-			loadConfig(absFile, importConfig); !ok {
+			loadConfig(itFile, importConfig); !ok {
 			return false
 		} else if importItem, ok := importConfig[itName]; !ok {
 			return false
@@ -187,19 +177,16 @@ func (p *Context) subContext(rawCmd *Command) *Context {
 			)
 		}
 
-		if runCmd.File != "" {
-			if v, ok := p.AbsPath(runCmd.File); ok {
-				file = v
-			} else {
-				return nil
-			}
-		}
-
 		// Load config
 		config := make(map[string]*Job)
-		if configFile, ok := p.Clone("%s.file", p.path).
+
+		if runCmd.File != "" {
+			file = runCmd.File
+		}
+
+		if absFile, ok := p.Clone("%s.file", file).
 			loadConfig(file, &config); ok {
-			file = configFile
+			file = absFile
 		} else {
 			return nil
 		}
@@ -208,8 +195,9 @@ func (p *Context) subContext(rawCmd *Command) *Context {
 		if v, ok := config[runCmd.Exec]; ok {
 			jobConfig = v
 		} else {
-			p.Clone("%s.exec", p.path).
-				LogError("could not find job \"%s\"", runCmd.Exec)
+			p.Clone("%s.exec", p.path).LogError(
+				"could not find job \"%s\" in \"%s\"", runCmd.Exec, file,
+			)
 			return nil
 		}
 
@@ -405,31 +393,31 @@ func (p *Context) getRunnersName() string {
 	return strings.Join(nameArray, ",")
 }
 
-func (p *Context) AbsPath(path string) (string, bool) {
-	dir := p.file
-	if IsFile(p.file) {
-		dir = filepath.Dir(p.file)
-	}
+// func (p *Context) AbsPath(path string) (string, bool) {
 
-	if filepath.IsAbs(path) {
-		return path, true
-	} else if ret, e := filepath.Abs(filepath.Join(dir, path)); e != nil {
-		p.LogError(e.Error())
-		return "", false
-	} else {
-		return ret, true
-	}
-}
+// }
 
-func (p *Context) loadConfig(absPath string, v interface{}) (string, bool) {
+func (p *Context) loadConfig(path string, v interface{}) (string, bool) {
 	var fnUnmarshal (func(data []byte, v interface{}) error)
-	ret := absPath
+
+	ret := ""
+	if filepath.IsAbs(path) {
+		ret = path
+	} else if p.file == "" {
+		v, e := filepath.Abs(path)
+		if e != nil {
+			p.LogError(e.Error())
+		}
+		ret = v
+	} else {
+		ret = filepath.Join(filepath.Dir(p.file), path)
+	}
 
 	// If config file is a directory, we try to find default config file
-	if IsDir(absPath) {
-		yamlFile := filepath.Join(absPath, "main.yaml")
-		ymlFile := filepath.Join(absPath, "main.yml")
-		jsonFile := filepath.Join(absPath, "main.json")
+	if IsDir(ret) {
+		yamlFile := filepath.Join(ret, "main.yaml")
+		ymlFile := filepath.Join(ret, "main.yml")
+		jsonFile := filepath.Join(ret, "main.json")
 
 		if IsFile(yamlFile) {
 			ret = yamlFile
@@ -441,7 +429,7 @@ func (p *Context) loadConfig(absPath string, v interface{}) (string, bool) {
 			p.LogError(
 				"could not find main.yaml or main.yml or main.json "+
 					"in directory \"%s\"\n",
-				absPath,
+				ret,
 			)
 			return "", false
 		}
