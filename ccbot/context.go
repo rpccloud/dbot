@@ -15,17 +15,15 @@ import (
 )
 
 type Context struct {
+	parent         *Context
 	runnerGroupMap map[string][]string
 	runnerMap      map[string]Runner
 	jobConfig      *Job
-	jobEnv         Env
-	parent         *Context
 	rawCmd         *Command
 	runCmd         *Command
 	runners        []Runner
 	path           string
 	file           string
-	upEnv          Env
 }
 
 func NewContext(file string, jobName string) *Context {
@@ -39,6 +37,7 @@ func NewContext(file string, jobName string) *Context {
 		path:    "dbot.init",
 		file:    "",
 		runners: []Runner{&LocalRunner{}},
+		runCmd:  &Command{Env: Env{}},
 	}
 
 	if currentDir, e := os.Getwd(); e == nil {
@@ -53,10 +52,7 @@ func NewContext(file string, jobName string) *Context {
 		return nil
 	}
 
-	ret := vCtx.subContext(
-		&Command{Tag: "job", Exec: jobName, File: absFile},
-		Env{},
-	)
+	ret := vCtx.subContext(&Command{Tag: "job", Exec: jobName, File: absFile})
 
 	ret.parent = nil
 
@@ -80,7 +76,7 @@ func (p *Context) init() bool {
 		}
 		jobEnv[key] = useEnv.ParseString(value, "", false)
 	}
-	p.jobEnv = jobEnv
+	p.runCmd.Env = jobEnv
 
 	// Load imports
 	for key, it := range p.jobConfig.Imports {
@@ -157,12 +153,20 @@ func (p *Context) loadSSHGroup(list []*Remote) []string {
 	return ret
 }
 
-func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
-	runCmd := (&Context{rawCmd: rawCmd, upEnv: upEnv}).parseCommand()
+func (p *Context) subContext(rawCmd *Command) *Context {
+	env := p.runCmd.Env.Merge(p.runCmd.Env.ParseEnv(rawCmd.Env))
+	runCmd := &Command{
+		Tag:   env.ParseString(rawCmd.Tag, "cmd", true),
+		Exec:  env.ParseString(rawCmd.Exec, "", false),
+		On:    env.ParseString(rawCmd.On, "", true),
+		Stdin: env.ParseStringArray(rawCmd.Stdin),
+		Env:   env,
+		Args:  env.ParseEnv(rawCmd.Args),
+		File:  env.ParseString(rawCmd.File, "", true),
+	}
 	file := p.file
 	runners := p.runners
 	path := p.path
-	// config := make(map[string]*Job)
 	jobConfig := p.jobConfig
 	needInitJob := false
 
@@ -241,14 +245,12 @@ func (p *Context) subContext(rawCmd *Command, upEnv Env) *Context {
 		runnerGroupMap: runnerGroupMap,
 		runnerMap:      p.runnerMap,
 		jobConfig:      jobConfig,
-		jobEnv:         p.jobEnv,
 		parent:         p,
 		rawCmd:         rawCmd,
 		runCmd:         runCmd,
 		runners:        runners,
 		path:           path,
 		file:           file,
-		upEnv:          upEnv,
 	}
 
 	if needInitJob {
@@ -305,14 +307,12 @@ func (p *Context) Clone(format string, a ...interface{}) *Context {
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
 		jobConfig:      p.jobConfig,
-		jobEnv:         p.jobEnv,
 		parent:         p.parent,
 		rawCmd:         p.rawCmd,
 		runCmd:         p.runCmd,
 		runners:        p.runners,
 		path:           fmt.Sprintf(format, a...),
 		file:           p.file,
-		upEnv:          p.upEnv,
 	}
 }
 
@@ -353,7 +353,7 @@ func (p *Context) runJob() bool {
 	if !p.jobConfig.Async {
 		for i := 0; i < len(p.jobConfig.Commands); i++ {
 			ctx := p.Clone("%s.commands[%d]", p.runCmd.Exec, i).
-				subContext(p.jobConfig.Commands[i], p.jobEnv)
+				subContext(p.jobConfig.Commands[i])
 
 			if ctx == nil {
 				return false
@@ -373,7 +373,7 @@ func (p *Context) runJob() bool {
 	for i := 0; i < len(p.jobConfig.Commands); i++ {
 		go func(idx int) {
 			ctx := p.Clone("jobs.%s.commands[%d]", p.runCmd.Exec, idx).
-				subContext(p.jobConfig.Commands[idx], p.jobEnv)
+				subContext(p.jobConfig.Commands[idx])
 			waitCH <- ctx.Run()
 		}(i)
 	}
@@ -475,21 +475,6 @@ func (p *Context) loadConfig(absPath string, v interface{}) (string, bool) {
 		return "", false
 	} else {
 		return ret, true
-	}
-}
-
-func (p *Context) parseCommand() *Command {
-	cmdEnv := p.upEnv.ParseEnv(p.rawCmd.Env)
-	useEnv := p.upEnv.Merge(cmdEnv)
-
-	return &Command{
-		Tag:   p.upEnv.ParseString(p.rawCmd.Tag, "cmd", true),
-		Exec:  useEnv.ParseString(p.rawCmd.Exec, "", false),
-		On:    useEnv.ParseString(p.rawCmd.On, "", true),
-		Stdin: useEnv.ParseStringArray(p.rawCmd.Stdin),
-		Env:   cmdEnv,
-		Args:  useEnv.ParseEnv(p.rawCmd.Args),
-		File:  useEnv.ParseString(p.rawCmd.File, "", true),
 	}
 }
 

@@ -15,10 +15,10 @@ default:
       desc: "Input etcd cluster name: "
   commands: 
     - tag: job
-      env: 
-        OutputDir: ${ConfigDir}/../../data/etcd/ca/client
-      exec: initEtcdNodeCA
       file: ../examples/etcd/main.yml
+      exec: initEtcdNodeCA
+      args: 
+        OutputDir: ${ConfigDir}/../data/etcd/ca/client
     - exec: tr [a-z] [A-Z]
       stdin:
         - abc

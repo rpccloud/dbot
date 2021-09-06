@@ -1,16 +1,16 @@
 initEtcdNodeCA:
   commands:
-    - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
+    - exec: mkdir -p ${OutputDir}
     - tag: job
       file: ../ca/main.yml
       exec: createCA
-      env: 
-        OutputDir: ${ConfigDir}/../../data/etcd/ca/nodes
+      args: 
+        OutputDir: ${OutputDir}/node
 initEtcdClientCA:
   commands:
-    - exec: mkdir -p ${ConfigDir}/../../data/etcd/ca
+    - exec: mkdir -p ${OutputDir}
     - tag: job
       file: ../ca/main.yml
       exec: createCA
-      env: 
-        OutputDir: ${ConfigDir}/../../data/etcd/ca/client
+      args: 
+        OutputDir: ${OutputDir}/client
