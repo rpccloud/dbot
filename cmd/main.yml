@@ -14,6 +14,22 @@ default:
       type: text
       desc: "Input etcd cluster name: "
   commands: 
+    - tag: script
+      exec: |
+        (function(name) {
+          dbot.Log("hello log " + name)
+          dbot.Error("hello error " + name)
+          dbot.Command({
+            exec: 'echo "hello uu"',
+            stdin: [
+              "hello",
+              "world",
+            ],
+            env: {
+              TestEnv: "you",
+            },
+          })
+        }) ("world")
     - tag: job
       file: ../examples/etcd/main.yml
       exec: initEtcdNodeCA
