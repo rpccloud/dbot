@@ -174,43 +174,47 @@ func (p *Context) initJob() bool {
 	for key, it := range p.job.Imports {
 		itName := jobEnv.ParseString(it.Name, "", true)
 		itFile := jobEnv.ParseString(it.File, "", true)
-		importConfig := make(map[string][]*Remote)
+		config := make(map[string][]*Remote)
 
 		if absFile, ok := p.Clone("%s.imports.%s", p.path, key).
-			loadConfig(itFile, importConfig); !ok {
+			loadConfig(itFile, config); !ok {
 			return false
-		} else if importItem, ok := importConfig[itName]; !ok {
+		} else if item, ok := config[itName]; !ok {
 			return false
 		} else {
-			ctx := &Context{
+			sshGroup := (&Context{
+				parent:         p,
 				runnerGroupMap: p.runnerGroupMap,
 				runnerMap:      p.runnerMap,
 				path:           itName,
 				file:           absFile,
 				runners:        p.runners,
-			}
+			}).loadSSHGroup(item, Env{})
 
-			sshGroup := ctx.loadSSHGroup(importItem)
 			if sshGroup == nil {
 				return false
 			}
+
 			p.runnerGroupMap[key] = sshGroup
 		}
 	}
 
 	// Load remotes
 	for key, list := range p.job.Remotes {
-		sshGroup := p.Clone("%s.remotes.%s", p.path, key).loadSSHGroup(list)
+		sshGroup := p.Clone("%s.remotes.%s", p.path, key).
+			loadSSHGroup(list, jobEnv)
+
 		if sshGroup == nil {
 			return false
 		}
+
 		p.runnerGroupMap[key] = sshGroup
 	}
 
 	return true
 }
 
-func (p *Context) loadSSHGroup(list []*Remote) []string {
+func (p *Context) loadSSHGroup(list []*Remote, env Env) []string {
 	if len(list) == 0 {
 		p.LogError("list is empty")
 		return nil
@@ -218,9 +222,9 @@ func (p *Context) loadSSHGroup(list []*Remote) []string {
 
 	ret := make([]string, 0)
 	for idx, it := range list {
-		host := Env{}.ParseString(it.Host, "", true)
-		user := Env{}.ParseString(it.User, os.Getenv("USER"), true)
-		port := Env{}.ParseString(it.Port, "22", true)
+		host := env.ParseString(it.Host, "", true)
+		user := env.ParseString(it.User, os.Getenv("USER"), true)
+		port := env.ParseString(it.Port, "22", true)
 
 		id := fmt.Sprintf("%s@%s:%s", user, host, port)
 
@@ -354,7 +358,12 @@ func (p *Context) runJob() bool {
 		go func(idx int) {
 			ctx := p.Clone("jobs.%s.commands[%d]", p.runCmd.Exec, idx).
 				subContext(p.job.Commands[idx])
-			waitCH <- ctx.Run()
+
+			if ctx == nil {
+				waitCH <- false
+			} else {
+				waitCH <- ctx.Run()
+			}
 		}(i)
 	}
 
@@ -379,12 +388,9 @@ func (p *Context) runCommand() bool {
 
 func (p *Context) getRunnersName() string {
 	nameArray := make([]string, 0)
+
 	for _, runner := range p.runners {
 		nameArray = append(nameArray, runner.Name())
-	}
-
-	if len(nameArray) == 0 {
-		return ""
 	}
 
 	return strings.Join(nameArray, ",")
