@@ -155,6 +155,7 @@ func (p *Context) loadSSHGroup(list []*Remote) []string {
 
 func (p *Context) subContext(rawCmd *Command) *Context {
 	env := p.runCmd.Env.Merge(p.runCmd.Env.ParseEnv(rawCmd.Env))
+	// Notice: if rawCmd tag is job, then runCmd.Env will change in init func
 	runCmd := &Command{
 		Tag:   env.ParseString(rawCmd.Tag, "cmd", true),
 		Exec:  env.ParseString(rawCmd.Exec, "", false),
@@ -213,7 +214,6 @@ func (p *Context) subContext(rawCmd *Command) *Context {
 		// Check is the job exist
 		if v, ok := config[runCmd.Exec]; ok {
 			jobConfig = v
-			needInitJob = true
 		} else {
 			p.Clone("%s.exec", p.path).
 				LogError("could not find job \"%s\"", runCmd.Exec)
@@ -221,6 +221,8 @@ func (p *Context) subContext(rawCmd *Command) *Context {
 		}
 
 		path = runCmd.Exec
+		runCmd.Env = nil
+		needInitJob = true
 	default:
 		p.Clone("%s.tag", p.path).LogError("unsupported tag \"%s\"", runCmd.Tag)
 		return nil
