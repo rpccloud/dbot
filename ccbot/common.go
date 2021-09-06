@@ -112,7 +112,6 @@ type Command struct {
 	File  string
 }
 
-
 func GetStandradOut(s string) string {
 	if s != "" && s[len(s)-1] != '\n' {
 		return s + "\n"
