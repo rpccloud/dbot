@@ -103,7 +103,7 @@ func (p *Context) init() bool {
 				runnerMap:      p.runnerMap,
 				path:           itName,
 				file:           absFile,
-				runners:        []Runner{p.runnerMap["local"]},
+				runners:        p.runners,
 			}
 
 			sshGroup := ctx.loadSSHGroup(importItem)
