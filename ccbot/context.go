@@ -18,7 +18,7 @@ type Context struct {
 	parent         *Context
 	runnerGroupMap map[string][]string
 	runnerMap      map[string]Runner
-	jobConfig      *Job
+	job            *Job
 	rawCmd         *Command
 	runCmd         *Command
 	runners        []Runner
@@ -26,6 +26,7 @@ type Context struct {
 	file           string
 }
 
+// NewContext create the root context
 func NewContext(file string, jobName string) *Context {
 	vCtx := &Context{
 		runnerGroupMap: map[string][]string{
@@ -45,27 +46,132 @@ func NewContext(file string, jobName string) *Context {
 	return ret
 }
 
-func (p *Context) init() bool {
+// subContext create sub Context
+func (p *Context) subContext(rawCmd *Command) *Context {
+	cmdEnv := p.runCmd.Env.Merge(p.runCmd.Env.ParseEnv(rawCmd.Env))
+	// Notice: if rawCmd tag is job, then runCmd.Env will change in init func
+	runCmd := &Command{
+		Tag:   cmdEnv.ParseString(rawCmd.Tag, "cmd", true),
+		Exec:  cmdEnv.ParseString(rawCmd.Exec, "", false),
+		On:    cmdEnv.ParseString(rawCmd.On, "", true),
+		Stdin: cmdEnv.ParseStringArray(rawCmd.Stdin),
+		Env:   cmdEnv,
+		Args:  cmdEnv.ParseEnv(rawCmd.Args),
+		File:  cmdEnv.ParseString(rawCmd.File, "", true),
+	}
+
+	file := p.file
+	runners := p.runners
+	path := p.path
+	job := p.job
+
+	switch runCmd.Tag {
+	case "cmd", "script":
+		if len(rawCmd.Args) > 0 {
+			p.Clone("%s.args", p.path).LogError(
+				"unsupported args on tag \"%s\"", runCmd.Tag,
+			)
+		}
+
+		if rawCmd.File != "" {
+			p.Clone("%s.file", p.path).LogError(
+				"unsupported file on tag \"%s\"", runCmd.Tag,
+			)
+		}
+	case "job":
+		if len(rawCmd.Stdin) > 0 {
+			p.Clone("%s.stdin", p.path).LogError(
+				"unsupported stdin on tag \"%s\"", runCmd.Tag,
+			)
+		}
+
+		// Load config
+		config := make(map[string]*Job)
+
+		if runCmd.File != "" {
+			file = runCmd.File
+		}
+
+		if v, ok := p.Clone("%s.file", file).loadConfig(file, &config); ok {
+			file = v
+		} else {
+			return nil
+		}
+
+		// Check is the job exist
+		if v, ok := config[runCmd.Exec]; ok {
+			job = v
+		} else {
+			p.Clone("%s.exec", p.path).LogError(
+				"could not find job \"%s\" in \"%s\"", runCmd.Exec, file,
+			)
+			return nil
+		}
+
+		path = runCmd.Exec
+		runCmd.Env = nil
+	default:
+		p.Clone("%s.tag", p.path).LogError("unsupported tag \"%s\"", runCmd.Tag)
+		return nil
+	}
+
+	// Set runners
+	if runCmd.On != "" {
+		if v := p.getRunners(runCmd.On); len(v) > 0 {
+			runners = v
+		} else {
+			return nil
+		}
+	}
+
+	// clone runnerGroupMap
+	runnerGroupMap := make(map[string][]string)
+	for key, value := range p.runnerGroupMap {
+		runnerGroupMap[key] = value
+	}
+
+	ret := &Context{
+		runnerGroupMap: runnerGroupMap,
+		runnerMap:      p.runnerMap,
+		job:            job,
+		parent:         p,
+		rawCmd:         rawCmd,
+		runCmd:         runCmd,
+		runners:        runners,
+		path:           path,
+		file:           file,
+	}
+
+	if runCmd.Tag == "job" {
+		if !ret.initJob() {
+			return nil
+		}
+	}
+
+	return ret
+}
+
+func (p *Context) initJob() bool {
 	// init jobEnv
 	rootEnv := p.getRootEnv()
-	useEnv := rootEnv.
-		Merge(rootEnv.ParseEnv(p.jobConfig.Env)).
+	jobEnv := rootEnv.
+		Merge(rootEnv.ParseEnv(p.job.Env)).
 		Merge(p.runCmd.Args)
-	jobEnv := useEnv.Merge(Env{})
-	for key, it := range p.jobConfig.Inputs {
-		itDesc := useEnv.ParseString(it.Desc, "input "+key+": ", false)
-		itType := useEnv.ParseString(it.Type, "text", true)
+	tmpEnv := jobEnv.Merge(Env{})
+	for key, it := range p.job.Inputs {
+		itDesc := tmpEnv.ParseString(it.Desc, "input "+key+": ", false)
+		itType := tmpEnv.ParseString(it.Type, "text", true)
 		value, ok := p.Clone("%s.inputs.%s", p.path, key).
 			GetUserInput(itDesc, itType)
 		if !ok {
 			return false
 		}
-		jobEnv[key] = useEnv.ParseString(value, "", false)
+		jobEnv[key] = tmpEnv.ParseString(value, "", false)
 	}
 	p.runCmd.Env = jobEnv
 
 	// Load imports
-	for key, it := range p.jobConfig.Imports {
+	for key, it := range p.job.Imports {
 		itName := jobEnv.ParseString(it.Name, "", true)
 		itFile := jobEnv.ParseString(it.File, "", true)
 		importConfig := make(map[string][]*Remote)
@@ -93,7 +199,7 @@ func (p *Context) init() bool {
 	}
 
 	// Load remotes
-	for key, list := range p.jobConfig.Remotes {
+	for key, list := range p.job.Remotes {
 		sshGroup := p.Clone("%s.remotes.%s", p.path, key).loadSSHGroup(list)
 		if sshGroup == nil {
 			return false
@@ -131,115 +237,6 @@ func (p *Context) loadSSHGroup(list []*Remote) []string {
 		}
 
 		ret = append(ret, id)
-	}
-
-	return ret
-}
-
-func (p *Context) subContext(rawCmd *Command) *Context {
-	env := p.runCmd.Env.Merge(p.runCmd.Env.ParseEnv(rawCmd.Env))
-	// Notice: if rawCmd tag is job, then runCmd.Env will change in init func
-	runCmd := &Command{
-		Tag:   env.ParseString(rawCmd.Tag, "cmd", true),
-		Exec:  env.ParseString(rawCmd.Exec, "", false),
-		On:    env.ParseString(rawCmd.On, "", true),
-		Stdin: env.ParseStringArray(rawCmd.Stdin),
-		Env:   env,
-		Args:  env.ParseEnv(rawCmd.Args),
-		File:  env.ParseString(rawCmd.File, "", true),
-	}
-	file := p.file
-	runners := p.runners
-	path := p.path
-	jobConfig := p.jobConfig
-	needInitJob := false
-
-	switch runCmd.Tag {
-	case "cmd", "script":
-		if len(rawCmd.Args) > 0 {
-			p.Clone("%s.args", p.path).LogError(
-				"unsupported args on tag \"%s\"",
-				runCmd.Tag,
-			)
-		}
-
-		if rawCmd.File != "" {
-			p.Clone("%s.file", p.path).LogError(
-				"unsupported file on tag \"%s\"",
-				runCmd.Tag,
-			)
-		}
-	case "job":
-		if len(rawCmd.Stdin) > 0 {
-			p.Clone("%s.stdin", p.path).LogError(
-				"unsupported stdin on tag \"%s\"",
-				runCmd.Tag,
-			)
-		}
-
-		// Load config
-		config := make(map[string]*Job)
-
-		if runCmd.File != "" {
-			file = runCmd.File
-		}
-
-		if absFile, ok := p.Clone("%s.file", file).
-			loadConfig(file, &config); ok {
-			file = absFile
-		} else {
-			return nil
-		}
-
-		// Check is the job exist
-		if v, ok := config[runCmd.Exec]; ok {
-			jobConfig = v
-		} else {
-			p.Clone("%s.exec", p.path).LogError(
-				"could not find job \"%s\" in \"%s\"", runCmd.Exec, file,
-			)
-			return nil
-		}
-
-		path = runCmd.Exec
-		runCmd.Env = nil
-		needInitJob = true
-	default:
-		p.Clone("%s.tag", p.path).LogError("unsupported tag \"%s\"", runCmd.Tag)
-		return nil
-	}
-
-	// Set runners
-	if runCmd.On != "" {
-		if v := p.getRunners(runCmd.On); len(v) > 0 {
-			runners = v
-		} else {
-			return nil
-		}
-	}
-
-	// clone runnerGroupMap
-	runnerGroupMap := make(map[string][]string)
-	for key, value := range p.runnerGroupMap {
-		runnerGroupMap[key] = value
-	}
-
-	ret := &Context{
-		runnerGroupMap: runnerGroupMap,
-		runnerMap:      p.runnerMap,
-		jobConfig:      jobConfig,
-		parent:         p,
-		rawCmd:         rawCmd,
-		runCmd:         runCmd,
-		runners:        runners,
-		path:           path,
-		file:           file,
-	}
-
-	if needInitJob {
-		if !ret.init() {
-			return nil
-		}
 	}
 
 	return ret
@@ -289,7 +286,7 @@ func (p *Context) Clone(format string, a ...interface{}) *Context {
 	return &Context{
 		runnerGroupMap: p.runnerGroupMap,
 		runnerMap:      p.runnerMap,
-		jobConfig:      p.jobConfig,
+		job:            p.job,
 		parent:         p.parent,
 		rawCmd:         p.rawCmd,
 		runCmd:         p.runCmd,
@@ -333,10 +330,10 @@ func (p *Context) Run() bool {
 
 func (p *Context) runJob() bool {
 	// If the commands are run in sequence, run them one by one and return
-	if !p.jobConfig.Async {
-		for i := 0; i < len(p.jobConfig.Commands); i++ {
+	if !p.job.Async {
+		for i := 0; i < len(p.job.Commands); i++ {
 			ctx := p.Clone("%s.commands[%d]", p.runCmd.Exec, i).
-				subContext(p.jobConfig.Commands[i])
+				subContext(p.job.Commands[i])
 
 			if ctx == nil {
 				return false
@@ -351,19 +348,19 @@ func (p *Context) runJob() bool {
 	}
 
 	// The commands are run async
-	waitCH := make(chan bool, len(p.jobConfig.Commands))
+	waitCH := make(chan bool, len(p.job.Commands))
 
-	for i := 0; i < len(p.jobConfig.Commands); i++ {
+	for i := 0; i < len(p.job.Commands); i++ {
 		go func(idx int) {
 			ctx := p.Clone("jobs.%s.commands[%d]", p.runCmd.Exec, idx).
-				subContext(p.jobConfig.Commands[idx])
+				subContext(p.job.Commands[idx])
 			waitCH <- ctx.Run()
 		}(i)
 	}
 
 	// Wait for all commands to complete
 	ret := true
-	for i := 0; i < len(p.jobConfig.Commands); i++ {
+	for i := 0; i < len(p.job.Commands); i++ {
 		if !<-waitCH {
 			ret = false
 		}
@@ -392,10 +389,6 @@ func (p *Context) getRunnersName() string {
 
 	return strings.Join(nameArray, ",")
 }
-
-// func (p *Context) AbsPath(path string) (string, bool) {
-
-// }
 
 func (p *Context) loadConfig(path string, v interface{}) (string, bool) {
 	var fnUnmarshal (func(data []byte, v interface{}) error)
