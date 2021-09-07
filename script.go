@@ -101,6 +101,7 @@ func parseCommandFromObject(object *otto.Object) (*Command, error) {
 }
 
 type DbotObject struct {
+	vm     *otto.Otto
 	stdout *bytes.Buffer
 	stderr *bytes.Buffer
 	ctx    *Context
@@ -161,5 +162,7 @@ func (p *DbotObject) Command(call otto.FunctionCall) otto.Value {
 
 	p.seed++
 
-	return otto.Value{}
+	ret, _ := p.vm.ToValue("hihi@@")
+
+	return ret
 }

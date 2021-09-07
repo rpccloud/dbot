@@ -14,14 +14,14 @@ default:
       type: text
       desc: "Input etcd cluster name: "
   commands: 
+    - exec: mkdir /asfdasd/sdfsdf
     - tag: script
       exec: |
         (function(name) {
-          dbot.Log("hello log " + name)
-          dbot.Error("hello error " + name)
-          dbot.Command({
+          var v = dbot.Command({
             exec: 'echo "hello ytu"',
           })
+          dbot.Log("hello  " + v)
           dbot.Command({
             exec: 'echo "hello uu"',
             stdin: [

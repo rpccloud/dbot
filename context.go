@@ -386,6 +386,7 @@ func (p *Context) runScript() bool {
 
 	vm := otto.New()
 	_ = vm.Set("dbot", &DbotObject{
+		vm:     vm,
 		stdout: stdout,
 		stderr: stderr,
 		ctx:    p,
